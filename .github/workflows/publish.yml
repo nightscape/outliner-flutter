@@ -9,6 +9,7 @@ jobs:
   publish:
     permissions:
       id-token: write # Required for authentication using OIDC
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,6 +17,8 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+
+      - uses: flutter-actions/setup-pubdev-credentials@v1
 
       - name: Install dependencies
         run: flutter pub get
