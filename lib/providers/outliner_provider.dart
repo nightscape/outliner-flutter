@@ -213,4 +213,28 @@ class OutlinerNotifier extends StateNotifier<OutlinerState> {
       await addChildBlock(blockId, child);
     }
   }
+
+  Future<void> focusNextBlock(String blockId) async {
+    try {
+      final nextBlockId = await _repository.findNextVisibleBlock(blockId);
+      if (nextBlockId != null) {
+        setFocusedBlock(nextBlockId, cursorPosition: CursorPosition.start);
+      }
+    } catch (e) {
+      state = OutlinerState.error(e.toString());
+    }
+  }
+
+  Future<void> focusPreviousBlock(String blockId) async {
+    try {
+      final previousBlockId = await _repository.findPreviousVisibleBlock(
+        blockId,
+      );
+      if (previousBlockId != null) {
+        setFocusedBlock(previousBlockId, cursorPosition: CursorPosition.end);
+      }
+    } catch (e) {
+      state = OutlinerState.error(e.toString());
+    }
+  }
 }

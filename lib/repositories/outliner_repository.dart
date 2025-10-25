@@ -32,4 +32,8 @@ abstract class OutlinerRepository {
   Future<void> outdentBlock(String blockId);
 
   Future<void> splitBlock(String blockId, int cursorPosition);
+
+  Future<String?> findNextVisibleBlock(String blockId);
+
+  Future<String?> findPreviousVisibleBlock(String blockId);
 }

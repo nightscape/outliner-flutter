@@ -332,4 +332,46 @@ class InMemoryOutlinerRepository implements OutlinerRepository {
     }
     return false;
   }
+
+  @override
+  Future<String?> findNextSiblingBlock(String blockId) async {
+    final parentId = await findParentId(blockId);
+    final currentIndex = await findBlockIndex(blockId);
+
+    List<Block> siblings;
+    if (parentId == null) {
+      siblings = _blocks;
+    } else {
+      final parent = _findBlockInRoots(parentId);
+      if (parent == null) return null;
+      siblings = parent.children;
+    }
+
+    if (currentIndex == -1 || currentIndex >= siblings.length - 1) {
+      return null;
+    }
+
+    return siblings[currentIndex + 1].id;
+  }
+
+  @override
+  Future<String?> findPreviousSiblingBlock(String blockId) async {
+    final parentId = await findParentId(blockId);
+    final currentIndex = await findBlockIndex(blockId);
+
+    List<Block> siblings;
+    if (parentId == null) {
+      siblings = _blocks;
+    } else {
+      final parent = _findBlockInRoots(parentId);
+      if (parent == null) return null;
+      siblings = parent.children;
+    }
+
+    if (currentIndex <= 0) {
+      return null;
+    }
+
+    return siblings[currentIndex - 1].id;
+  }
 }
