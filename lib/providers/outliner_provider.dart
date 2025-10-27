@@ -17,66 +17,78 @@ final outlinerProvider = StateNotifierProvider<OutlinerNotifier, OutlinerState>(
 
 class OutlinerNotifier extends StateNotifier<OutlinerState> {
   final OutlinerRepository _repository;
+  String? _currentViewRootId;
 
   OutlinerNotifier(this._repository) : super(const OutlinerState.loading()) {
     loadBlocks();
   }
 
   Future<void> loadBlocks() async {
-    final currentFocusedBlockId = state.whenOrNull(
-      loaded: (_, focusedBlockId) => focusedBlockId,
+    final previousState = state;
+    final currentFocusedBlockId = previousState.whenOrNull(
+      loaded: (_, focusedBlockId, __, ___) => focusedBlockId,
     );
 
     state = const OutlinerState.loading();
     try {
-      final blocks = await _repository.getRootBlocks();
+      final root = await _repository.getRootBlock();
+      _currentViewRootId ??= root.id;
+      final viewRoot = _resolveViewRoot(root, _currentViewRootId!);
+
       state = OutlinerState.loaded(
-        blocks,
+        viewRoot,
         focusedBlockId: currentFocusedBlockId,
+        viewRootId: viewRoot.id,
       );
     } catch (e) {
       state = OutlinerState.error(e.toString());
     }
   }
 
-  void setFocusedBlock(String? blockId) {
+  void setFocusedBlock(String? blockId, {CursorPosition? cursorPosition}) {
     state.whenOrNull(
-      loaded: (blocks, _) {
-        state = OutlinerState.loaded(blocks, focusedBlockId: blockId);
+      loaded: (rootBlock, _, currentCursorPosition, viewRootId) {
+        state = OutlinerState.loaded(
+          rootBlock,
+          focusedBlockId: blockId,
+          cursorPosition: cursorPosition ?? currentCursorPosition,
+          viewRootId: viewRootId,
+        );
       },
     );
   }
 
   String? get focusedBlockId {
-    return state.whenOrNull(loaded: (_, focusedBlockId) => focusedBlockId);
+    return state.whenOrNull(
+      loaded: (_, focusedBlockId, __, ___) => focusedBlockId,
+    );
   }
 
-  Future<void> addRootBlock(Block block) async {
-    try {
-      await _repository.addRootBlock(block);
+  Future<void> setViewRoot(String blockId) async {
+    _currentViewRootId = blockId;
+    await loadBlocks();
+  }
+
+  Future<void> resetViewRoot() async {
+    final root = await _repository.getRootBlock();
+    if (_currentViewRootId != root.id) {
+      _currentViewRootId = root.id;
       await loadBlocks();
-    } catch (e) {
-      state = OutlinerState.error(e.toString());
     }
   }
 
-  Future<void> insertRootBlock(int index, Block block) async {
-    try {
-      await _repository.insertRootBlock(index, block);
-      await loadBlocks();
-    } catch (e) {
-      state = OutlinerState.error(e.toString());
+  Block _resolveViewRoot(Block root, String viewRootId) {
+    if (viewRootId == root.id) {
+      return root;
     }
+    final found = root.findBlockById(viewRootId);
+    if (found != null) {
+      return found;
+    }
+    _currentViewRootId = root.id;
+    return root;
   }
 
-  Future<void> removeRootBlock(Block block) async {
-    try {
-      await _repository.removeRootBlock(block);
-      await loadBlocks();
-    } catch (e) {
-      state = OutlinerState.error(e.toString());
-    }
-  }
 
   Future<void> updateBlock(String blockId, String newContent) async {
     try {
@@ -116,7 +128,7 @@ class OutlinerNotifier extends StateNotifier<OutlinerState> {
 
   Future<void> moveBlock(
     String blockId,
-    String? newParentId,
+    String newParentId,
     int newIndex,
   ) async {
     try {
@@ -147,8 +159,9 @@ class OutlinerNotifier extends StateNotifier<OutlinerState> {
 
   Future<void> splitBlock(String blockId, int cursorPosition) async {
     try {
-      await _repository.splitBlock(blockId, cursorPosition);
+      final newBlockId = await _repository.splitBlock(blockId, cursorPosition);
       await loadBlocks();
+      setFocusedBlock(newBlockId, cursorPosition: CursorPosition.start);
     } catch (e) {
       state = OutlinerState.error(e.toString());
     }
@@ -162,12 +175,8 @@ class OutlinerNotifier extends StateNotifier<OutlinerState> {
     }
   }
 
-  Future<String?> findParentId(String blockId) async {
-    try {
-      return await _repository.findParentId(blockId);
-    } catch (e) {
-      return null;
-    }
+  Future<String> findParentId(String blockId) async {
+    return await _repository.findParentId(blockId);
   }
 
   Future<int> findBlockIndex(String blockId) async {

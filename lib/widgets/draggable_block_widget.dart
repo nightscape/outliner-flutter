@@ -15,6 +15,7 @@ class DraggableBlockWidget extends ConsumerStatefulWidget {
   final int depth;
   final bool keyboardShortcutsEnabled;
   final BlockStyle style;
+  final bool isLastSibling;
   final Widget Function(BuildContext context, Block block)? blockBuilder;
   final Widget Function(
     BuildContext context,
@@ -55,6 +56,7 @@ class DraggableBlockWidget extends ConsumerStatefulWidget {
     this.depth = 0,
     this.keyboardShortcutsEnabled = true,
     this.style = const BlockStyle(),
+    this.isLastSibling = false,
     this.blockBuilder,
     this.editingBlockBuilder,
     this.bulletBuilder,
@@ -68,14 +70,9 @@ class DraggableBlockWidget extends ConsumerStatefulWidget {
       _DraggableBlockWidgetState();
 }
 
-const double _kDragHandleSize = 16.0;
-const double _kDragHandleSpacing = 6.0;
 const double _kChildDropZoneWidth = 96.0;
-const Color _kDefaultDropZoneColor = Color(0xFF1B73E8);
 const Color _kDefaultDropZoneHighlight = Color.fromARGB(120, 27, 115, 232);
-const Color _kDefaultDragHandleColor = Color(0xFF8A8A8A);
-const Color _kDefaultDragFeedbackBackground = Color(0xFFF5F5F5);
-const Color _kDefaultDragFeedbackText = Color(0xFF303030);
+const double _kDropZoneHitHeight = 16.0;
 
 class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
   bool _isDraggingOverBefore = false;
@@ -85,6 +82,7 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
   @override
   Widget build(BuildContext context) {
     final indent = widget.depth * widget.style.indentWidth;
+    final hasChildren = widget.block.hasChildren;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,69 +90,53 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
         _buildDropZone(DropPosition.before, indent),
         Padding(
           padding: EdgeInsets.only(left: indent),
-          child: _buildRow(context),
+          child: _buildRow(context, showAsChildZone: !hasChildren),
         ),
-        _buildDropZone(DropPosition.after, indent),
         if (!widget.block.isCollapsed)
-          ...widget.block.children.map(
-            (child) => DraggableBlockWidget(
-              key: ValueKey(child.id),
-              block: child,
-              depth: widget.depth + 1,
-              keyboardShortcutsEnabled: widget.keyboardShortcutsEnabled,
-              style: widget.style,
-              blockBuilder: widget.blockBuilder,
-              editingBlockBuilder: widget.editingBlockBuilder,
-              bulletBuilder: widget.bulletBuilder,
-              textFieldDecorationBuilder: widget.textFieldDecorationBuilder,
-              dragFeedbackBuilder: widget.dragFeedbackBuilder,
-              dropZoneBuilder: widget.dropZoneBuilder,
+          ...widget.block.children.asMap().entries.map(
+            (entry) {
+              final index = entry.key;
+              final child = entry.value;
+              final isLastChild = index == widget.block.children.length - 1;
+
+              return DraggableBlockWidget(
+                key: ValueKey(child.id),
+                block: child,
+                depth: widget.depth + 1,
+                keyboardShortcutsEnabled: widget.keyboardShortcutsEnabled,
+                style: widget.style,
+                isLastSibling: isLastChild,
+                blockBuilder: widget.blockBuilder,
+                editingBlockBuilder: widget.editingBlockBuilder,
+                bulletBuilder: widget.bulletBuilder,
+                textFieldDecorationBuilder: widget.textFieldDecorationBuilder,
+                dragFeedbackBuilder: widget.dragFeedbackBuilder,
+                dropZoneBuilder: widget.dropZoneBuilder,
+              );
+            },
+          ),
+        if (widget.isLastSibling)
+          _buildDropZone(DropPosition.after, indent),
+      ],
+    );
+  }
+
+  Widget _buildRow(BuildContext context, {required bool showAsChildZone}) {
+    return Stack(
+      children: [
+        _buildDraggableBlock(context),
+        if (showAsChildZone)
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: _kChildDropZoneWidth,
+            child: IgnorePointer(
+              ignoring: false,
+              child: _buildDropZoneOnBlock(context),
             ),
           ),
       ],
-    );
-  }
-
-  Widget _buildRow(BuildContext context) {
-    return Stack(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildDragHandle(context),
-            SizedBox(width: _kDragHandleSpacing),
-            Expanded(child: _buildDraggableBlock(context)),
-          ],
-        ),
-        Positioned(
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: _kChildDropZoneWidth,
-          child: IgnorePointer(
-            ignoring: false,
-            child: _buildDropZoneOnBlock(context),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDragHandle(BuildContext context) {
-    final dragData = DragData(
-      block: widget.block,
-      sourceParentId: '',
-      sourceIndex: 0,
-    );
-
-    return Draggable<DragData>(
-      data: dragData,
-      feedback: _buildDragFeedback(context),
-      childWhenDragging: Opacity(
-        opacity: 0.3,
-        child: _DragHandle(color: _resolveDragHandleColor()),
-      ),
-      child: _DragHandle(color: _resolveDragHandleColor()),
     );
   }
 
@@ -185,6 +167,22 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
       bulletBuilder: widget.bulletBuilder,
       textFieldDecorationBuilder: widget.textFieldDecorationBuilder,
       applyDepthPadding: false,
+      bulletDragWrapper: _buildBulletDragWrapper,
+    );
+  }
+
+  Widget _buildBulletDragWrapper(BuildContext context, Widget child) {
+    final dragData = DragData(
+      block: widget.block,
+      sourceParentId: '',
+      sourceIndex: 0,
+    );
+
+    return Draggable<DragData>(
+      data: dragData,
+      feedback: _buildDragFeedback(context),
+      childWhenDragging: Opacity(opacity: 0.3, child: child),
+      child: child,
     );
   }
 
@@ -193,31 +191,70 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
       return widget.dragFeedbackBuilder!(context, widget.block);
     }
 
-    final textStyle = widget.style.textStyle.merge(
-      const TextStyle(color: _kDefaultDragFeedbackText),
-    );
+    final children = widget.block.children.take(5).toList();
 
-    final content = widget.block.content.isEmpty
-        ? widget.style.emptyBlockText
-        : widget.block.content;
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 320),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: _kDefaultDragFeedbackBackground,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(
-            color: _kDefaultDragHandleColor.withValues(alpha: 0.3),
+    return Material(
+      color: Colors.transparent,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ),
-        child: Padding(
           padding: const EdgeInsets.all(8),
-          child: Text(
-            content,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: textStyle,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Opacity(
+                opacity: 0.7,
+                child: BlockWidget(
+                  block: widget.block,
+                  depth: widget.depth,
+                  keyboardShortcutsEnabled: false,
+                  style: widget.style,
+                  blockBuilder: widget.blockBuilder,
+                  editingBlockBuilder: widget.editingBlockBuilder,
+                  bulletBuilder: widget.bulletBuilder,
+                  textFieldDecorationBuilder: widget.textFieldDecorationBuilder,
+                  applyDepthPadding: true,
+                ),
+              ),
+              ...children.asMap().entries.map((entry) {
+                final index = entry.key;
+                final child = entry.value;
+                final scale = 0.8;
+                final opacity = (0.7 - (index + 1) * 0.1).clamp(0.0, 1.0);
+
+                return Transform.scale(
+                  scale: scale,
+                  alignment: Alignment.topLeft,
+                  child: Opacity(
+                    opacity: opacity,
+                    child: BlockWidget(
+                      block: child,
+                      depth: widget.depth + 1,
+                      keyboardShortcutsEnabled: false,
+                      style: widget.style,
+                      blockBuilder: widget.blockBuilder,
+                      editingBlockBuilder: widget.editingBlockBuilder,
+                      bulletBuilder: widget.bulletBuilder,
+                      textFieldDecorationBuilder:
+                          widget.textFieldDecorationBuilder,
+                      applyDepthPadding: true,
+                    ),
+                  ),
+                );
+              }),
+            ],
           ),
         ),
       ),
@@ -231,8 +268,11 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
         : _isDraggingOverAfter;
 
     return DragTarget<DragData>(
-      onWillAcceptWithDetails: (details) =>
-          details.data.block.id != widget.block.id,
+      onWillAcceptWithDetails: (details) {
+        // For before/after, just check if source and target are different
+        // The repository layer will handle complex validation
+        return details.data.block.id != widget.block.id;
+      },
       onAcceptWithDetails: (details) {
         _handleDrop(details.data, position);
         setState(() {
@@ -241,6 +281,18 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
         });
       },
       onMove: (details) {
+        // Only highlight if this would be a valid drop
+        if (details.data.block.id == widget.block.id) return;
+
+        // For before/after, check if the target's parent is a descendant of source
+        // (which would make source become a child of its own descendant)
+        final targetParentId = _findParentIdSync(widget.block.id);
+        if (targetParentId != null) {
+          if (_isDescendantOfById(targetParentId, details.data.block.id)) {
+            return;
+          }
+        }
+
         setState(() {
           if (isBefore) {
             _isDraggingOverBefore = true;
@@ -264,6 +316,7 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
             widget.dropZoneBuilder?.call(context, highlighted, indent) ??
             AnimatedContainer(
               duration: const Duration(milliseconds: 150),
+              width: double.infinity,
               height: highlighted ? 4 : 2,
               decoration: BoxDecoration(
                 color: highlighted
@@ -275,7 +328,14 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
 
         return Padding(
           padding: EdgeInsets.only(left: indent),
-          child: indicator,
+          child: SizedBox(
+            height: _kDropZoneHitHeight,
+            child: Align(
+              alignment:
+                  isBefore ? Alignment.topLeft : Alignment.bottomLeft,
+              child: indicator,
+            ),
+          ),
         );
       },
     );
@@ -284,8 +344,8 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
   Widget _buildDropZoneOnBlock(BuildContext context) {
     return DragTarget<DragData>(
       onWillAcceptWithDetails: (details) {
-        return details.data.block.id != widget.block.id &&
-            !_isDescendantOf(details.data.block, widget.block);
+        if (details.data.block.id == widget.block.id) return false;
+        return !_isDescendantOfById(widget.block.id, details.data.block.id);
       },
       onAcceptWithDetails: (details) {
         _handleDrop(details.data, DropPosition.asChild);
@@ -294,6 +354,10 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
         });
       },
       onMove: (details) {
+        // Only highlight if this would be a valid drop
+        if (details.data.block.id == widget.block.id) return;
+        if (_isDescendantOfById(widget.block.id, details.data.block.id)) return;
+
         setState(() {
           _isDraggingOverChild = true;
         });
@@ -331,12 +395,57 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
     return false;
   }
 
+  /// Finds the parent ID of a block synchronously using the current state.
+  String? _findParentIdSync(String blockId) {
+    final state = ref.read(outlinerProvider);
+    return state.maybeWhen(
+      loaded: (rootBlock, _, __, ___) {
+        return _findParentIdInBlock(rootBlock, blockId);
+      },
+      orElse: () => null,
+    );
+  }
+
+  /// Recursively finds the parent ID of a block in the tree.
+  String? _findParentIdInBlock(Block parent, String blockId) {
+    for (var child in parent.children) {
+      if (child.id == blockId) return parent.id;
+      final found = _findParentIdInBlock(child, blockId);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  /// Checks if [potentialDescendantId] is a descendant of [ancestorId] using
+  /// the current state from the provider (not stale Block objects).
+  bool _isDescendantOfById(String potentialDescendantId, String ancestorId) {
+    final state = ref.read(outlinerProvider);
+    return state.maybeWhen(
+      loaded: (rootBlock, _, __, ___) {
+        final ancestor = rootBlock.findBlockById(ancestorId);
+        if (ancestor == null) return false;
+
+        // Check if the potentialDescendant is found in the ancestor's subtree
+        return ancestor.findBlockById(potentialDescendantId) != null;
+      },
+      orElse: () => false,
+    );
+  }
+
   Future<void> _handleDrop(DragData dragData, DropPosition position) async {
     final notifier = ref.read(outlinerProvider.notifier);
+    final state = ref.read(outlinerProvider);
+
+    final rootId = state.whenOrNull(
+      loaded: (rootBlock, _, __, ___) => rootBlock.id,
+    );
+
+    if (rootId == null) return;
+
     final currentParentId = await notifier.findParentId(widget.block.id);
     final currentIndex = await notifier.findBlockIndex(widget.block.id);
 
-    String? newParentId;
+    String newParentId;
     int newIndex;
 
     switch (position) {
@@ -354,61 +463,15 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
         break;
     }
 
+    debugPrint(
+      '[Drop] source=${dragData.block.id} target=${widget.block.id} '
+      'position=$position newParent=$newParentId newIndex=$newIndex',
+    );
+
     await notifier.moveBlock(dragData.block.id, newParentId, newIndex);
   }
 
   Color _resolveDropZoneColor() {
-    return widget.style.bulletColor ?? _kDefaultDropZoneColor;
-  }
-
-  Color _resolveDragHandleColor() {
-    return widget.style.bulletColor ?? _kDefaultDragHandleColor;
-  }
-}
-
-class _DragHandle extends StatelessWidget {
-  const _DragHandle({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: _kDragHandleSize + _kDragHandleSpacing,
-      child: Center(
-        child: CustomPaint(
-          size: const Size(_kDragHandleSize, _kDragHandleSize),
-          painter: _DragHandlePainter(color),
-        ),
-      ),
-    );
-  }
-}
-
-class _DragHandlePainter extends CustomPainter {
-  _DragHandlePainter(this.color);
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    const lineHeight = 2.0;
-    const lineSpacing = 4.0;
-
-    for (var i = 0; i < 3; i++) {
-      final dy = i * (lineHeight + lineSpacing);
-      final rect = Rect.fromLTWH(0, dy, size.width, lineHeight);
-      final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(1.5));
-      canvas.drawRRect(rrect, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DragHandlePainter oldDelegate) {
-    return oldDelegate.color != color;
+    return widget.style.bulletColor ?? const Color.fromARGB(255, 225, 192, 24);
   }
 }

@@ -104,7 +104,8 @@ class OutlinerListView extends ConsumerWidget {
     return outlinerState.when(
       loading: () => _buildLoadingState(context),
       error: (message) => _buildErrorState(context, ref, message),
-      loaded: (blocks, focusedBlockId) => _buildLoadedState(context, blocks),
+      loaded: (rootBlock, focusedBlockId, cursorPosition, viewRootId) =>
+          _buildLoadedState(context, rootBlock),
     );
   }
 
@@ -147,7 +148,12 @@ class OutlinerListView extends ConsumerWidget {
     );
   }
 
-  Widget _buildLoadedState(BuildContext context, List<Block> blocks) {
+  Widget _buildLoadedState(
+    BuildContext context,
+    Block rootBlock,
+  ) {
+    final blocks = rootBlock.children;
+
     if (blocks.isEmpty) {
       return _buildEmptyState(context);
     }
@@ -155,19 +161,28 @@ class OutlinerListView extends ConsumerWidget {
     return ListView(
       padding: config.padding,
       children: blocks
+          .asMap()
+          .entries
           .map(
-            (block) => DraggableBlockWidget(
-              key: ValueKey(block.id),
-              block: block,
-              keyboardShortcutsEnabled: config.keyboardShortcutsEnabled,
-              style: config.blockStyle,
-              blockBuilder: blockBuilder,
-              editingBlockBuilder: editingBlockBuilder,
-              bulletBuilder: bulletBuilder,
-              textFieldDecorationBuilder: textFieldDecorationBuilder,
-              dragFeedbackBuilder: dragFeedbackBuilder,
-              dropZoneBuilder: dropZoneBuilder,
-            ),
+            (entry) {
+              final index = entry.key;
+              final block = entry.value;
+              final isLastSibling = index == blocks.length - 1;
+
+              return DraggableBlockWidget(
+                key: ValueKey(block.id),
+                block: block,
+                keyboardShortcutsEnabled: config.keyboardShortcutsEnabled,
+                style: config.blockStyle,
+                isLastSibling: isLastSibling,
+                blockBuilder: blockBuilder,
+                editingBlockBuilder: editingBlockBuilder,
+                bulletBuilder: bulletBuilder,
+                textFieldDecorationBuilder: textFieldDecorationBuilder,
+                dragFeedbackBuilder: dragFeedbackBuilder,
+                dropZoneBuilder: dropZoneBuilder,
+              );
+            },
           )
           .toList(),
     );
@@ -178,9 +193,15 @@ class OutlinerListView extends ConsumerWidget {
     return Consumer(
       builder: (context, ref, _) {
         void onAddBlock() {
-          ref
-              .read(outlinerProvider.notifier)
-              .addRootBlock(Block.create(content: ''));
+          final state = ref.read(outlinerProvider);
+          final rootId = state.whenOrNull(
+            loaded: (rootBlock, _, __, ___) => rootBlock.id,
+          );
+          if (rootId != null) {
+            ref
+                .read(outlinerProvider.notifier)
+                .addChildBlock(rootId, Block.create(content: ''));
+          }
         }
 
         if (emptyBuilder != null) {

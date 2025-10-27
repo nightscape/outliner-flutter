@@ -11,14 +11,27 @@ import 'outliner_model.dart';
 import 'property_test_base.dart';
 import 'test_context.dart';
 
+// Deterministic ID generator for property tests
+class IdGenerator {
+  int _counter = 0;
+
+  String next() {
+    return 'pbt-block-${_counter++}';
+  }
+}
+
 Future<ProviderContainer> _createContainer({
   List<Block> rootBlocks = const [],
+  required IdGenerator sutIdGenerator,
 }) async {
   final container = ProviderContainer(
     overrides: [
       outlinerProvider.overrideWith(
         (ref) => OutlinerNotifier(
-          InMemoryOutlinerRepository(initializeSampleData: false),
+          InMemoryOutlinerRepository(
+            initializeSampleData: false,
+            idGenerator: sutIdGenerator.next,
+          ),
         ),
       ),
     ],
@@ -26,8 +39,13 @@ Future<ProviderContainer> _createContainer({
 
   final notifier = container.read(outlinerProvider.notifier);
   await notifier.loadBlocks();
-  for (final block in rootBlocks) {
-    await notifier.addRootBlock(block);
+  final rootId = notifier.state.whenOrNull(
+    loaded: (rootBlock, _, __, ___) => rootBlock.id,
+  );
+  if (rootId != null) {
+    for (final block in rootBlocks) {
+      await notifier.addChildBlock(rootId, block);
+    }
   }
   return container;
 }
@@ -54,12 +72,17 @@ void main() {
     testWidgets('Stateful property: all operations preserve invariants', (
       WidgetTester tester,
     ) async {
+      final sutIdGenerator = IdGenerator();
+      final modelIdGenerator = IdGenerator();
       await runPropertyTest<UIContext, UIOutlinerModel>(
         blockGenerator: BlockGenerators.blockList(),
         createContext: (blocks) async {
-          final container = await _createContainer(rootBlocks: blocks);
+          final container = await _createContainer(
+            rootBlocks: blocks,
+            sutIdGenerator: sutIdGenerator,
+          );
           await _pumpOutliner(tester, container);
-          return UIContext(tester, container);
+          return UIContext(tester, container, modelIdGenerator);
         },
         createModel: (ctx) => UIOutlinerModel.fromContext(ctx),
         interpreter: UIInterpreter(),

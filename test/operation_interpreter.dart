@@ -6,6 +6,8 @@ import 'operations.dart';
 import 'outliner_model.dart';
 import 'test_context.dart';
 
+const double _kChildDropZoneWidth = 96.0;
+
 abstract class OperationInterpreter<
   C extends TestContext,
   M extends OutlinerModel
@@ -32,79 +34,66 @@ class NotifierInterpreter
         // Skip drag operations that are essentially noops
         if (sourceBlockId == targetBlockId) return;
 
-        try {
-          String? newParentId;
+        String newParentId;
 
-          if (targetType == DragTargetType.asChild) {
-            if (model.isDescendantOf(targetBlockId, sourceBlockId)) return;
-            newParentId = targetBlockId;
-          } else {
-            newParentId = model.parentMap[targetBlockId];
+        if (targetType == DragTargetType.asChild) {
+          if (model.isDescendantOf(targetBlockId, sourceBlockId)) return;
+          newParentId = targetBlockId;
+        } else {
+          final parentFromModel = model.parentMap[targetBlockId];
+          newParentId = parentFromModel ?? model.rootId;
 
-            // Skip if already in the same parent
-            final currentParentId = model.parentMap[sourceBlockId];
-            if (currentParentId == newParentId) return;
-          }
-
-          // Prevent making a block a child of itself
-          if (sourceBlockId == newParentId) return;
-
-          // Prevent creating cycles
-          if (newParentId != null &&
-              model.isDescendantOf(newParentId, sourceBlockId)) {
-            return;
-          }
-
-          final newIndex = () {
-            if (targetType == DragTargetType.asChild) {
-              final children = List<String>.from(
-                model.childrenMap[targetBlockId] ?? const [],
-              );
-              return children.length;
-            }
-
-            final siblings = newParentId == null
-                ? ctx.blocks.map((b) => b.id).toList()
-                : List<String>.from(model.childrenMap[newParentId] ?? const []);
-
-            final targetIndex = siblings.indexOf(targetBlockId);
-            if (targetIndex == -1) {
-              return siblings.length;
-            }
-
-            return targetType == DragTargetType.before
-                ? targetIndex
-                : targetIndex + 1;
-          }();
-
-          await ctx.notifier.moveBlock(sourceBlockId, newParentId, newIndex);
-
-          final actualModel = OutlinerModel.fromNotifier(ctx.notifier);
-          model.copyFrom(actualModel);
-        } catch (e) {
-          // Move failed, keep model as-is (don't sync to avoid propagating bad state)
+          // Skip if already in the same parent
+          final currentParentId = model.parentMap[sourceBlockId];
+          if (currentParentId == newParentId) return;
         }
+
+        // Prevent making a block a child of itself
+        if (sourceBlockId == newParentId) return;
+
+        // Prevent creating cycles
+        if (model.isDescendantOf(newParentId, sourceBlockId)) {
+          return;
+        }
+
+        final newIndex = () {
+          if (targetType == DragTargetType.asChild) {
+            final children = List<String>.from(
+              model.childrenMap[targetBlockId] ?? const [],
+            );
+            return children.length;
+          }
+
+          final siblings = List<String>.from(
+            model.childrenMap[newParentId] ?? const [],
+          );
+
+          final targetIndex = siblings.indexOf(targetBlockId);
+          if (targetIndex == -1) {
+            return siblings.length;
+          }
+
+          return targetType == DragTargetType.before
+              ? targetIndex
+              : targetIndex + 1;
+        }();
+
+        await ctx.notifier.moveBlock(sourceBlockId, newParentId, newIndex);
+        model.moveBlock(sourceBlockId, newParentId, newIndex);
 
       case IndentOperation(:final blockId):
         if (blockId.isEmpty) return;
 
         // Check if there's a valid sibling to indent under
         final parentId = model.parentMap[blockId];
-        final siblings = parentId == null
-            ? ctx.blocks.map((b) => b.id).toList()
-            : (model.childrenMap[parentId] ?? []);
+        final siblings = model.childrenMap[parentId] ?? [];
         final blockIndex = siblings.indexOf(blockId);
 
         // Can only indent if there's a previous sibling
         if (blockIndex <= 0) return;
 
-        try {
-          await ctx.notifier.indentBlock(blockId);
-          final actualModel = OutlinerModel.fromNotifier(ctx.notifier);
-          model.copyFrom(actualModel);
-        } catch (e) {
-          // Indent may fail, keep model as-is
-        }
+        await ctx.notifier.indentBlock(blockId);
+        model.indentBlock(blockId);
 
       case OutdentOperation(:final blockId):
         if (blockId.isEmpty) return;
@@ -112,13 +101,8 @@ class NotifierInterpreter
         // Can only outdent if block has a parent
         if (model.parentMap[blockId] == null) return;
 
-        try {
-          await ctx.notifier.outdentBlock(blockId);
-          final actualModel = OutlinerModel.fromNotifier(ctx.notifier);
-          model.copyFrom(actualModel);
-        } catch (e) {
-          // Outdent may fail, keep model as-is
-        }
+        await ctx.notifier.outdentBlock(blockId);
+        model.outdentBlock(blockId);
 
       case EnterOperation():
         // Enter operation not supported in pure notifier tests
@@ -126,6 +110,14 @@ class NotifierInterpreter
 
       case ToggleCollapseOperation():
         // Toggle collapse not supported in pure notifier tests
+        break;
+
+      case ArrowUpOperation():
+        // Arrow navigation not supported in pure notifier tests (requires cursor position)
+        break;
+
+      case ArrowDownOperation():
+        // Arrow navigation not supported in pure notifier tests (requires cursor position)
         break;
     }
   }
@@ -153,6 +145,12 @@ class UIInterpreter extends OperationInterpreter<UIContext, UIOutlinerModel> {
 
       case ToggleCollapseOperation(:final blockId):
         await _performToggleCollapseOperation(ctx, model, blockId);
+
+      case ArrowUpOperation(:final blockId):
+        await _performArrowUpOperation(ctx, model, blockId);
+
+      case ArrowDownOperation(:final blockId):
+        await _performArrowDownOperation(ctx, model, blockId);
     }
   }
 
@@ -172,9 +170,16 @@ class UIInterpreter extends OperationInterpreter<UIContext, UIOutlinerModel> {
       skipOffstage: false,
     );
 
-    if (sourceFinder.evaluate().isEmpty || targetFinder.evaluate().isEmpty) {
-      return;
-    }
+    assert(
+      sourceFinder.evaluate().isNotEmpty,
+      'Source block widget not found: ${op.sourceBlockId}. '
+      'Generator should only produce operations on visible blocks.',
+    );
+    assert(
+      targetFinder.evaluate().isNotEmpty,
+      'Target block widget not found: ${op.targetBlockId}. '
+      'Generator should only produce operations on visible blocks.',
+    );
 
     await ctx.tester.ensureVisible(sourceFinder);
     await ctx.tester.pumpAndSettle();
@@ -183,18 +188,29 @@ class UIInterpreter extends OperationInterpreter<UIContext, UIOutlinerModel> {
 
     final sourceLocation = ctx.tester.getCenter(sourceFinder);
     final targetLocation = ctx.tester.getCenter(targetFinder);
+    final targetRect = ctx.tester.getRect(targetFinder);
 
     Offset dropOffset;
 
     switch (op.targetType) {
       case DragTargetType.before:
-        dropOffset = targetLocation + const Offset(0, -10);
+        dropOffset = Offset(
+          targetRect.left + 16,
+          targetRect.top + 4,
+        );
         break;
       case DragTargetType.after:
-        dropOffset = targetLocation + const Offset(0, 10);
+        dropOffset = Offset(
+          targetRect.left + 16,
+          targetRect.bottom - 4,
+        );
         break;
       case DragTargetType.asChild:
-        dropOffset = targetLocation + const Offset(150, 0);
+        final rightEdge = targetRect.right;
+        dropOffset = Offset(
+          rightEdge - (_kChildDropZoneWidth / 2),
+          targetRect.center.dy,
+        );
         break;
     }
 
@@ -220,8 +236,82 @@ class UIInterpreter extends OperationInterpreter<UIContext, UIOutlinerModel> {
     await gesture.up();
     await ctx.tester.pumpAndSettle();
 
-    final actualModel = UIOutlinerModel.fromNotifier(ctx.notifier);
-    model.copyFrom(actualModel);
+    // Validate the drop would be accepted by the UI
+    // UI validation: For "asChild", reject if target is a descendant of source
+    // For "before/after", UI only checks if blocks are different (repository handles complex validation)
+
+    // Skip drag if target is the source
+    if (op.sourceBlockId == op.targetBlockId) return;
+
+    // For asChild: check if target is a descendant of source (UI validation)
+    if (op.targetType == DragTargetType.asChild) {
+      if (model.isDescendantOf(op.targetBlockId, op.sourceBlockId)) {
+        debugPrint(
+          'Drag: ${op.sourceBlockId} -> ${op.targetType} ${op.targetBlockId} REJECTED (target is descendant)',
+        );
+        return;
+      }
+    }
+
+    // Calculate the new parent and index
+    String newParentId;
+    int newIndex;
+
+    if (op.targetType == DragTargetType.asChild) {
+      newParentId = op.targetBlockId;
+      final children = model.childrenMap[newParentId] ?? [];
+      newIndex = children.length;
+    } else {
+      final parentFromModel = model.parentMap[op.targetBlockId];
+      newParentId = parentFromModel ?? model.rootId;
+      final siblings = model.childrenMap[newParentId] ?? [];
+      final targetIndex = siblings.indexOf(op.targetBlockId);
+      newIndex = op.targetType == DragTargetType.before
+          ? targetIndex
+          : targetIndex + 1;
+    }
+
+    debugPrint(
+      'Drag: ${op.sourceBlockId} -> ${op.targetType} ${op.targetBlockId}',
+    );
+    debugPrint(
+      '  Target ${op.targetBlockId} has parent: ${model.parentMap[op.targetBlockId]}',
+    );
+    debugPrint(
+      '  Source ${op.sourceBlockId} has parent: ${model.parentMap[op.sourceBlockId]}',
+    );
+    debugPrint('  Calculated newParent=$newParentId, newIndex=$newIndex');
+
+    model.moveBlock(op.sourceBlockId, newParentId, newIndex);
+
+    debugPrint('  Model after: parent=${model.parentMap[op.sourceBlockId]}');
+  }
+
+  Future<void> _performBlockOperation(
+    UIContext ctx,
+    UIOutlinerModel model,
+    String blockId,
+    Future<void> Function(WidgetTester) performAction,
+    void Function() updateModel,
+  ) async {
+    if (blockId.isEmpty) return;
+
+    final blockFinder = find.byWidgetPredicate(
+      (widget) => widget is BlockWidget && widget.block.id == blockId,
+      skipOffstage: false,
+    );
+
+    if (blockFinder.evaluate().isEmpty) return;
+
+    await ctx.tester.ensureVisible(blockFinder);
+    await ctx.tester.pumpAndSettle();
+    await ctx.tester.tap(blockFinder);
+    await ctx.tester.pumpAndSettle();
+
+    await performAction(ctx.tester);
+    await ctx.tester.pumpAndSettle();
+
+    updateModel();
   }
 
   Future<void> _performIndentOperation(
@@ -229,29 +319,13 @@ class UIInterpreter extends OperationInterpreter<UIContext, UIOutlinerModel> {
     UIOutlinerModel model,
     String blockId,
   ) async {
-    if (blockId.isEmpty) return;
-
-    final blockFinder = find.byWidgetPredicate(
-      (widget) => widget is BlockWidget && widget.block.id == blockId,
-      skipOffstage: false,
+    await _performBlockOperation(
+      ctx,
+      model,
+      blockId,
+      (tester) => tester.sendKeyEvent(LogicalKeyboardKey.tab),
+      () => model.indentBlock(blockId),
     );
-
-    if (blockFinder.evaluate().isEmpty) return;
-
-    try {
-      await ctx.tester.ensureVisible(blockFinder);
-      await ctx.tester.pumpAndSettle();
-      await ctx.tester.tap(blockFinder);
-      await ctx.tester.pumpAndSettle();
-
-      await ctx.tester.sendKeyEvent(LogicalKeyboardKey.tab);
-      await ctx.tester.pumpAndSettle();
-
-      final actualModel = UIOutlinerModel.fromNotifier(ctx.notifier);
-      model.copyFrom(actualModel);
-    } catch (e) {
-      // Skip this action if it fails
-    }
   }
 
   Future<void> _performOutdentOperation(
@@ -259,31 +333,11 @@ class UIInterpreter extends OperationInterpreter<UIContext, UIOutlinerModel> {
     UIOutlinerModel model,
     String blockId,
   ) async {
-    if (blockId.isEmpty) return;
-
-    final blockFinder = find.byWidgetPredicate(
-      (widget) => widget is BlockWidget && widget.block.id == blockId,
-      skipOffstage: false,
-    );
-
-    if (blockFinder.evaluate().isEmpty) return;
-
-    try {
-      await ctx.tester.ensureVisible(blockFinder);
-      await ctx.tester.pumpAndSettle();
-      await ctx.tester.tap(blockFinder);
-      await ctx.tester.pumpAndSettle();
-
-      await ctx.tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
-      await ctx.tester.sendKeyEvent(LogicalKeyboardKey.tab);
-      await ctx.tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
-      await ctx.tester.pumpAndSettle();
-
-      final actualModel = UIOutlinerModel.fromNotifier(ctx.notifier);
-      model.copyFrom(actualModel);
-    } catch (e) {
-      // Skip this action if it fails
-    }
+    await _performBlockOperation(ctx, model, blockId, (tester) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shift);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
+    }, () => model.outdentBlock(blockId));
   }
 
   Future<void> _performEnterOperation(
@@ -301,52 +355,63 @@ class UIInterpreter extends OperationInterpreter<UIContext, UIOutlinerModel> {
 
     if (blockFinder.evaluate().isEmpty) return;
 
-    try {
-      await ctx.tester.ensureVisible(blockFinder);
-      await ctx.tester.pumpAndSettle();
-      await ctx.tester.tap(blockFinder);
-      await ctx.tester.pumpAndSettle();
+    await ctx.tester.ensureVisible(blockFinder);
+    await ctx.tester.pumpAndSettle();
+    await ctx.tester.tap(blockFinder);
+    await ctx.tester.pumpAndSettle();
 
-      final textFieldFinder = find.descendant(
-        of: blockFinder,
-        matching: find.byType(TextField),
-      );
+    final textFieldFinder = find.descendant(
+      of: blockFinder,
+      matching: find.byType(TextField),
+    );
 
-      if (textFieldFinder.evaluate().isEmpty) return;
+    if (textFieldFinder.evaluate().isEmpty) return;
 
-      final textField = ctx.tester.widget<TextField>(textFieldFinder);
-      if (textField.controller == null) return;
+    final textField = ctx.tester.widget<TextField>(textFieldFinder);
+    if (textField.controller == null) return;
 
-      final text = textField.controller!.text;
-      int cursorPosition;
+    final text = textField.controller!.text;
+    int cursorPosition;
 
-      switch (positionType) {
-        case 0: // Start
-          cursorPosition = 0;
-          break;
-        case 1: // Middle
-          cursorPosition = text.length ~/ 2;
-          break;
-        case 2: // End
-          cursorPosition = text.length;
-          break;
-        default:
-          cursorPosition = 0;
-      }
-
-      textField.controller!.selection = TextSelection.collapsed(
-        offset: cursorPosition,
-      );
-      await ctx.tester.pumpAndSettle();
-
-      await ctx.tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await ctx.tester.pumpAndSettle();
-
-      final actualModel = UIOutlinerModel.fromNotifier(ctx.notifier);
-      model.copyFrom(actualModel);
-    } catch (e) {
-      // Skip this action if it fails
+    switch (positionType) {
+      case 0: // Start
+        cursorPosition = 0;
+        break;
+      case 1: // Middle
+        cursorPosition = text.length ~/ 2;
+        break;
+      case 2: // End
+        cursorPosition = text.length;
+        break;
+      default:
+        cursorPosition = 0;
     }
+
+    textField.controller!.selection = TextSelection.collapsed(
+      offset: cursorPosition,
+    );
+    await ctx.tester.pumpAndSettle();
+
+    // Predict the new block ID using the deterministic ID generator
+    final newBlockId = ctx.idGenerator.next();
+
+    debugPrint('Enter: splitting $blockId at position $cursorPosition');
+    debugPrint('  Content before split: ${model.contentMap[blockId]}');
+    debugPrint('  New block ID: $newBlockId');
+
+    // Perform the UI operation
+    await ctx.tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await ctx.tester.pumpAndSettle();
+
+    // Update model to match
+    model.splitBlock(blockId, newBlockId, cursorPosition);
+
+    debugPrint(
+      '  After split - original content: ${model.contentMap[blockId]}',
+    );
+    debugPrint(
+      '  After split - new block content: ${model.contentMap[newBlockId]}',
+    );
   }
 
   Future<void> _performToggleCollapseOperation(
@@ -363,16 +428,82 @@ class UIInterpreter extends OperationInterpreter<UIContext, UIOutlinerModel> {
 
     if (collapseIndicatorFinder.evaluate().isEmpty) return;
 
-    try {
-      await ctx.tester.ensureVisible(collapseIndicatorFinder);
-      await ctx.tester.pumpAndSettle();
-      await ctx.tester.tap(collapseIndicatorFinder);
-      await ctx.tester.pumpAndSettle();
+    await ctx.tester.ensureVisible(collapseIndicatorFinder);
+    await ctx.tester.pumpAndSettle();
+    await ctx.tester.tap(collapseIndicatorFinder);
+    await ctx.tester.pumpAndSettle();
 
-      final actualModel = UIOutlinerModel.fromNotifier(ctx.notifier);
-      model.copyFrom(actualModel);
-    } catch (e) {
-      // Skip this action if it fails
-    }
+    model.toggleCollapse(blockId);
+  }
+
+  Future<void> _performKeyboardOperationOnBlock(
+    UIContext ctx,
+    UIOutlinerModel model,
+    String blockId,
+    void Function(TextEditingController) setCursorPosition,
+    LogicalKeyboardKey key,
+  ) async {
+    if (blockId.isEmpty) return;
+
+    final blockFinder = find.byWidgetPredicate(
+      (widget) => widget is BlockWidget && widget.block.id == blockId,
+      skipOffstage: false,
+    );
+
+    if (blockFinder.evaluate().isEmpty) return;
+
+    await ctx.tester.ensureVisible(blockFinder);
+    await ctx.tester.pumpAndSettle();
+    await ctx.tester.tap(blockFinder);
+    await ctx.tester.pumpAndSettle();
+
+    final textFieldFinder = find.descendant(
+      of: blockFinder,
+      matching: find.byType(TextField),
+    );
+
+    if (textFieldFinder.evaluate().isEmpty) return;
+
+    final textField = ctx.tester.widget<TextField>(textFieldFinder);
+    if (textField.controller == null) return;
+
+    setCursorPosition(textField.controller!);
+    await ctx.tester.pumpAndSettle();
+
+    await ctx.tester.sendKeyEvent(key);
+    await ctx.tester.pumpAndSettle();
+
+    // Arrow keys don't change structure, only focus
+  }
+
+  Future<void> _performArrowUpOperation(
+    UIContext ctx,
+    UIOutlinerModel model,
+    String blockId,
+  ) async {
+    await _performKeyboardOperationOnBlock(
+      ctx,
+      model,
+      blockId,
+      (controller) =>
+          controller.selection = const TextSelection.collapsed(offset: 0),
+      LogicalKeyboardKey.arrowUp,
+    );
+  }
+
+  Future<void> _performArrowDownOperation(
+    UIContext ctx,
+    UIOutlinerModel model,
+    String blockId,
+  ) async {
+    await _performKeyboardOperationOnBlock(
+      ctx,
+      model,
+      blockId,
+      (controller) => controller.selection = TextSelection.collapsed(
+        offset: controller.text.length,
+      ),
+      LogicalKeyboardKey.arrowDown,
+    );
   }
 }

@@ -26,8 +26,13 @@ void main() {
 
           final notifier = container.read(outlinerProvider.notifier);
           await notifier.loadBlocks();
-          for (var block in blocks) {
-            await notifier.addRootBlock(block);
+          final rootId = notifier.state.whenOrNull(
+            loaded: (rootBlock, _, __, ___) => rootBlock.id,
+          );
+          if (rootId != null) {
+            for (var block in blocks) {
+              await notifier.addChildBlock(rootId, block);
+            }
           }
 
           return NotifierContext(notifier);

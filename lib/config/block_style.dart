@@ -45,19 +45,35 @@ class BlockStyle {
   final String emptyBlockText;
 
   const BlockStyle({
-    this.textStyle = const TextStyle(fontSize: 16),
+    this.textStyle = const TextStyle(
+      fontSize: 16,
+      height: 1.4,
+      letterSpacing: 0.0,
+      fontWeight: FontWeight.w400,
+      textBaseline: TextBaseline.alphabetic,
+    ),
     this.emptyTextStyle = const TextStyle(
       fontSize: 16,
+      height: 1.4,
+      letterSpacing: 0.0,
+      fontWeight: FontWeight.w400,
+      textBaseline: TextBaseline.alphabetic,
       color: Color(0xFF9E9E9E),
     ),
-    this.editingTextStyle = const TextStyle(fontSize: 16),
+    this.editingTextStyle = const TextStyle(
+      fontSize: 16,
+      height: 1.4,
+      letterSpacing: 0.0,
+      fontWeight: FontWeight.w400,
+      textBaseline: TextBaseline.alphabetic,
+    ),
     this.indentWidth = 24.0,
     this.bulletSpacing = 8.0,
     this.bulletSize = 6.0,
     this.bulletColor,
     this.collapseIconSize = 20.0,
     this.contentPadding = const EdgeInsets.symmetric(vertical: 2),
-    this.emptyBlockText = 'Empty block',
+    this.emptyBlockText = '',
   });
 
   /// Creates a copy of this BlockStyle with the given fields replaced

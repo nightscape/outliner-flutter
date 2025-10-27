@@ -1,17 +1,27 @@
 import '../models/block.dart';
+import '../models/tree_constants.dart';
 import 'outliner_repository.dart';
 
 class InMemoryOutlinerRepository implements OutlinerRepository {
-  List<Block> _blocks = [];
+  late Block _root;
+  final String Function()? _idGenerator;
 
-  InMemoryOutlinerRepository({bool initializeSampleData = true}) {
+  InMemoryOutlinerRepository({
+    bool initializeSampleData = true,
+    String Function()? idGenerator,
+  }) : _idGenerator = idGenerator {
+    _root = Block.create(
+      content: '',
+      isCollapsed: false,
+    );
+
     if (initializeSampleData) {
       _initializeSampleData();
     }
   }
 
   void _initializeSampleData() {
-    _blocks = [
+    final sampleChildren = [
       Block.create(
         content: 'Welcome to Flutter Outliner',
         children: [
@@ -32,236 +42,327 @@ class InMemoryOutlinerRepository implements OutlinerRepository {
       ),
       Block.create(content: 'Start typing to create your outline...'),
     ];
+
+    _setRootChildren(sampleChildren);
+  }
+
+  void _setRootChildren(List<Block> children) {
+    _root = _root.copyWith(children: children, updatedAt: DateTime.now());
   }
 
   @override
-  Future<List<Block>> getRootBlocks() async {
-    return List.unmodifiable(_blocks);
+  Future<Block> getRootBlock() async {
+    return _root;
   }
+
 
   @override
   Future<Block?> findBlockById(String blockId) async {
-    return _findBlockInRoots(blockId);
+    if (blockId == _root.id) {
+      return _root;
+    }
+    return _root.findBlockById(blockId);
   }
 
   @override
-  Future<String?> findParentId(String blockId) async {
-    for (var rootBlock in _blocks) {
-      if (rootBlock.id == blockId) {
-        return null;
-      }
-      final parentId = _findParentIdInTree(rootBlock, blockId);
-      if (parentId != null) return parentId;
+  Future<String> findParentId(String blockId) async {
+    if (blockId == _root.id) {
+      throw ArgumentError('findParentId called on root block: $blockId');
     }
-    return null;
+    final parentId = _findParentIdInTree(_root, blockId);
+    if (parentId == null) {
+      throw ArgumentError('Block not found in tree: $blockId');
+    }
+    return parentId;
   }
 
   @override
   Future<int> findBlockIndex(String blockId) async {
-    for (var i = 0; i < _blocks.length; i++) {
-      if (_blocks[i].id == blockId) {
-        return i;
-      }
+    if (blockId == _root.id) {
+      return -1;
     }
-
-    for (var rootBlock in _blocks) {
-      final index = _findBlockIndexInTree(rootBlock, blockId);
-      if (index != -1) return index;
+    final parentId = await findParentId(blockId);
+    final parent = _root.findBlockById(parentId);
+    if (parent == null) {
+      return -1;
     }
-    return -1;
+    return parent.children.indexWhere((child) => child.id == blockId);
   }
 
   @override
   Future<int> getTotalBlocks() async {
-    int count = 0;
-    for (var block in _blocks) {
-      count += block.totalBlocks;
-    }
-    return count;
-  }
-
-  @override
-  Future<void> addRootBlock(Block block) async {
-    _blocks = [..._blocks, block];
-  }
-
-  @override
-  Future<void> insertRootBlock(int index, Block block) async {
-    final newBlocks = [..._blocks];
-    newBlocks.insert(index, block);
-    _blocks = newBlocks;
-  }
-
-  @override
-  Future<void> removeRootBlock(Block block) async {
-    _blocks = _blocks.where((b) => b.id != block.id).toList();
+    return _root.totalBlocks - 1;
   }
 
   @override
   Future<void> updateBlock(String blockId, String content) async {
-    _blocks = _updateBlockInList(_blocks, blockId, (block) {
-      return block.copyWith(content: content, updatedAt: DateTime.now());
-    });
+    if (blockId == _root.id) {
+      return;
+    }
+    final updatedChildren = _updateBlockInList(
+      _root.children,
+      blockId,
+      (block) => block.copyWith(content: content, updatedAt: DateTime.now()),
+    );
+    _setRootChildren(updatedChildren);
   }
 
   @override
   Future<void> toggleBlockCollapse(String blockId) async {
-    _blocks = _updateBlockInList(_blocks, blockId, (block) {
-      return block.copyWith(isCollapsed: !block.isCollapsed);
-    });
+    if (blockId == _root.id) {
+      return;
+    }
+    final updatedChildren = _updateBlockInList(
+      _root.children,
+      blockId,
+      (block) => block.copyWith(
+        isCollapsed: !block.isCollapsed,
+        updatedAt: DateTime.now(),
+      ),
+    );
+    _setRootChildren(updatedChildren);
   }
 
   @override
   Future<void> addChildBlock(String parentId, Block child) async {
-    _blocks = _updateBlockInList(_blocks, parentId, (parent) {
-      return parent.copyWith(
-        children: [...parent.children, child],
-        updatedAt: DateTime.now(),
+    if (parentId == _root.id) {
+      _setRootChildren([..._root.children, child]);
+    } else {
+      final updatedChildren = _updateBlockInList(
+        _root.children,
+        parentId,
+        (parent) => parent.copyWith(
+          children: [...parent.children, child],
+          updatedAt: DateTime.now(),
+        ),
       );
-    });
+      _setRootChildren(updatedChildren);
+    }
   }
 
   @override
   Future<void> removeBlock(String blockId) async {
-    _blocks = _removeBlockFromList(_blocks, blockId);
+    if (blockId == _root.id) {
+      return;
+    }
+    final updatedChildren = _removeBlockFromList(_root.children, blockId);
+    _setRootChildren(updatedChildren);
   }
 
   @override
   Future<void> moveBlock(
     String blockId,
-    String? newParentId,
+    String newParentId,
     int newIndex,
   ) async {
-    final block = _findBlockInRoots(blockId);
-    if (block == null) return;
+    assert(blockId != _root.id, 'Cannot move root block');
+    assert(blockId != newParentId, 'Cannot make block a child of itself');
 
-    if (newParentId != null) {
-      if (blockId == newParentId) return;
-      if (_isDescendantOf(newParentId, block)) return;
+    final block = await findBlockById(blockId);
+    assert(block != null, 'Block not found: $blockId');
+
+    assert(
+      !isDescendantOf(newParentId, blockId),
+      'Cannot move block into its descendant',
+    );
+
+    var detached = _removeBlockFromList(_root.children, blockId);
+
+    if (newParentId == _root.id) {
+      final insertIndex = newIndex.clamp(0, detached.length);
+      detached.insert(insertIndex, block!);
+      _setRootChildren(detached);
+      return;
     }
 
-    var newState = _removeBlockFromList(_blocks, blockId);
+    detached = _updateBlockInList(detached, newParentId, (parent) {
+      final children = [...parent.children];
+      final insertIndex = newIndex.clamp(0, children.length);
+      children.insert(insertIndex, block!);
+      return parent.copyWith(children: children, updatedAt: DateTime.now());
+    });
 
-    if (newParentId == null) {
-      newState.insert(newIndex.clamp(0, newState.length), block);
-    } else {
-      newState = _updateBlockInList(newState, newParentId, (parent) {
-        final newChildren = [...parent.children];
-        newChildren.insert(newIndex.clamp(0, newChildren.length), block);
-        return parent.copyWith(
-          children: newChildren,
-          updatedAt: DateTime.now(),
-        );
-      });
-    }
-
-    _blocks = newState;
+    _setRootChildren(detached);
   }
 
   @override
   Future<void> indentBlock(String blockId) async {
     final parentId = await findParentId(blockId);
-    final currentIndex = await findBlockIndex(blockId);
+    final parent = await findBlockById(parentId);
+    if (parent == null) return;
 
-    List<Block> siblings;
-    if (parentId == null) {
-      siblings = _blocks;
-    } else {
-      final parent = _findBlockInRoots(parentId);
-      if (parent == null) return;
-      siblings = parent.children;
-    }
-
+    final siblings = parent.children;
+    final currentIndex = siblings.indexWhere((child) => child.id == blockId);
     if (currentIndex <= 0) return;
 
-    final previousSiblingId = siblings[currentIndex - 1].id;
-    final block = _findBlockInRoots(blockId);
-    if (block == null) return;
+    final newParentId = siblings[currentIndex - 1].id;
+    final newParent = await findBlockById(newParentId);
+    final newIndex = newParent?.children.length ?? 0;
 
-    var newState = _removeBlockFromList(_blocks, blockId);
-    newState = _updateBlockInList(newState, previousSiblingId, (sibling) {
-      return sibling.copyWith(
-        children: [...sibling.children, block],
-        updatedAt: DateTime.now(),
-      );
-    });
-
-    _blocks = newState;
+    await moveBlock(blockId, newParentId, newIndex);
   }
 
   @override
   Future<void> outdentBlock(String blockId) async {
     final parentId = await findParentId(blockId);
-    if (parentId == null) return;
+    if (parentId == _root.id) return;
 
-    final block = _findBlockInRoots(blockId);
-    if (block == null) return;
+    final grandParentId = await findParentId(parentId);
+    final grandParent = await findBlockById(grandParentId);
+    if (grandParent == null) return;
 
-    final grandparentId = await findParentId(parentId);
-    final parentIndex = await findBlockIndex(parentId);
+    final siblings = grandParent.children;
+    final parentIndex = siblings.indexWhere((child) => child.id == parentId);
+    if (parentIndex == -1) return;
 
-    var newState = _removeBlockFromList(_blocks, blockId);
-
-    if (grandparentId == null) {
-      newState.insert((parentIndex + 1).clamp(0, newState.length), block);
-    } else {
-      newState = _updateBlockInList(newState, grandparentId, (grandparent) {
-        final newChildren = [...grandparent.children];
-        final parentIndexInGrandparent = newChildren.indexWhere(
-          (b) => b.id == parentId,
-        );
-        if (parentIndexInGrandparent != -1) {
-          newChildren.insert(
-            (parentIndexInGrandparent + 1).clamp(0, newChildren.length),
-            block,
-          );
-        }
-        return grandparent.copyWith(
-          children: newChildren,
-          updatedAt: DateTime.now(),
-        );
-      });
-    }
-
-    _blocks = newState;
+    await moveBlock(blockId, grandParentId, parentIndex + 1);
   }
 
   @override
-  Future<void> splitBlock(String blockId, int cursorPosition) async {
-    final block = _findBlockInRoots(blockId);
-    if (block == null) return;
+  Future<String> splitBlock(String blockId, int cursorPosition) async {
+    final block = await findBlockById(blockId);
+    if (block == null || blockId == _root.id) {
+      return blockId;
+    }
+
+    final parentId = await findParentId(blockId);
+    final parent = parentId == _root.id ? _root : await findBlockById(parentId);
+    if (parent == null) return blockId;
 
     final content = block.content;
     final safePosition = cursorPosition.clamp(0, content.length);
     final beforeCursor = content.substring(0, safePosition);
     final afterCursor = content.substring(safePosition);
 
-    final newBlock = Block.create(content: afterCursor);
+    final newBlock = Block.create(
+      id: _idGenerator?.call(),
+      content: afterCursor,
+    );
 
-    _blocks = _updateBlockInList(_blocks, blockId, (b) {
-      return b.copyWith(content: beforeCursor, updatedAt: DateTime.now());
-    });
+    // Find the index of the block to split within its parent
+    final blockIndex = parent.children.indexWhere((child) => child.id == blockId);
+    if (blockIndex == -1) return blockId;
 
-    final parentId = await findParentId(blockId);
-    final blockIndex = await findBlockIndex(blockId);
+    if (parentId == _root.id) {
+      final newChildren = List<Block>.from(parent.children);
+      newChildren[blockIndex] = newChildren[blockIndex].copyWith(
+        content: beforeCursor,
+        updatedAt: DateTime.now(),
+      );
+      newChildren.insert(blockIndex + 1, newBlock);
+      _setRootChildren(newChildren);
+      return newBlock.id;
+    }
 
-    if (parentId == null) {
-      final newState = [..._blocks];
-      newState.insert(blockIndex + 1, newBlock);
-      _blocks = newState;
-    } else {
-      _blocks = _updateBlockInList(_blocks, parentId, (parent) {
-        final newChildren = [...parent.children];
-        final childIndex = newChildren.indexWhere((c) => c.id == blockId);
-        if (childIndex != -1) {
-          newChildren.insert(childIndex + 1, newBlock);
-        }
-        return parent.copyWith(
+    // Update the parent block using _updateBlockInList
+    final updatedChildren = _updateBlockInList(
+      _root.children,
+      parentId,
+      (parentBlock) {
+        final newChildren = List<Block>.from(parentBlock.children);
+        // Update the content of the original block
+        newChildren[blockIndex] = newChildren[blockIndex].copyWith(
+          content: beforeCursor,
+          updatedAt: DateTime.now(),
+        );
+        // Insert the new block right after
+        newChildren.insert(blockIndex + 1, newBlock);
+        return parentBlock.copyWith(
           children: newChildren,
           updatedAt: DateTime.now(),
         );
-      });
+      },
+    );
+
+    _setRootChildren(updatedChildren);
+    return newBlock.id;
+  }
+
+  @override
+  Future<String?> findNextVisibleBlock(String blockId) async {
+    final block = await findBlockById(blockId);
+    if (block == null) return null;
+
+    if (block.hasChildren && !block.isCollapsed) {
+      return block.children.first.id;
     }
+
+    return _findNextSiblingOrAncestor(blockId);
+  }
+
+  Future<String?> _findNextSiblingOrAncestor(String blockId) async {
+    final parentId = await findParentId(blockId);
+    if (parentId == _root.id) return null;
+
+    final parent = await findBlockById(parentId);
+    if (parent == null) return null;
+
+    final siblings = parent.children;
+    final currentIndex = siblings.indexWhere((child) => child.id == blockId);
+
+    if (currentIndex != -1 && currentIndex < siblings.length - 1) {
+      return siblings[currentIndex + 1].id;
+    }
+
+    return _findNextSiblingOrAncestor(parentId);
+  }
+
+  @override
+  Future<String?> findPreviousVisibleBlock(String blockId) async {
+    final parentId = await findParentId(blockId);
+    final parent = await findBlockById(parentId);
+    if (parent == null) return null;
+
+    final siblings = parent.children;
+    final currentIndex = siblings.indexWhere((child) => child.id == blockId);
+
+    if (currentIndex > 0) {
+      final previousSibling = siblings[currentIndex - 1];
+      return _findLastVisibleDescendant(previousSibling.id);
+    }
+
+    if (parentId == _root.id) {
+      return null;
+    }
+
+    return parentId;
+  }
+
+  Future<String?> _findLastVisibleDescendant(String blockId) async {
+    final block = await findBlockById(blockId);
+    if (block == null) return null;
+
+    if (block.hasChildren && !block.isCollapsed) {
+      return _findLastVisibleDescendant(block.children.last.id);
+    }
+
+    return blockId;
+  }
+
+  bool isDescendantOf(String potentialDescendantId, String ancestorId) {
+    if (ancestorId == potentialDescendantId) return true;
+    final ancestor = _root.findBlockById(ancestorId);
+    if (ancestor == null) return false;
+    return _isDescendantOf(potentialDescendantId, ancestor);
+  }
+
+  bool _isDescendantOf(String potentialDescendantId, Block ancestor) {
+    for (var child in ancestor.children) {
+      if (child.id == potentialDescendantId) return true;
+      if (_isDescendantOf(potentialDescendantId, child)) return true;
+    }
+    return false;
+  }
+
+  String? _findParentIdInTree(Block parent, String blockId) {
+    for (var child in parent.children) {
+      if (child.id == blockId) {
+        return parent.id;
+      }
+      final found = _findParentIdInTree(child, blockId);
+      if (found != null) return found;
+    }
+    return null;
   }
 
   List<Block> _removeBlockFromList(List<Block> blocks, String blockId) {
@@ -293,85 +394,5 @@ class InMemoryOutlinerRepository implements OutlinerRepository {
       }
       return block;
     }).toList();
-  }
-
-  Block? _findBlockInRoots(String blockId) {
-    for (var rootBlock in _blocks) {
-      final found = rootBlock.findBlockById(blockId);
-      if (found != null) return found;
-    }
-    return null;
-  }
-
-  String? _findParentIdInTree(Block parent, String blockId) {
-    for (var child in parent.children) {
-      if (child.id == blockId) {
-        return parent.id;
-      }
-      final found = _findParentIdInTree(child, blockId);
-      if (found != null) return found;
-    }
-    return null;
-  }
-
-  int _findBlockIndexInTree(Block parent, String blockId) {
-    for (var i = 0; i < parent.children.length; i++) {
-      if (parent.children[i].id == blockId) {
-        return i;
-      }
-      final found = _findBlockIndexInTree(parent.children[i], blockId);
-      if (found != -1) return found;
-    }
-    return -1;
-  }
-
-  bool _isDescendantOf(String potentialDescendantId, Block ancestor) {
-    if (ancestor.id == potentialDescendantId) return true;
-    for (var child in ancestor.children) {
-      if (_isDescendantOf(potentialDescendantId, child)) return true;
-    }
-    return false;
-  }
-
-  @override
-  Future<String?> findNextSiblingBlock(String blockId) async {
-    final parentId = await findParentId(blockId);
-    final currentIndex = await findBlockIndex(blockId);
-
-    List<Block> siblings;
-    if (parentId == null) {
-      siblings = _blocks;
-    } else {
-      final parent = _findBlockInRoots(parentId);
-      if (parent == null) return null;
-      siblings = parent.children;
-    }
-
-    if (currentIndex == -1 || currentIndex >= siblings.length - 1) {
-      return null;
-    }
-
-    return siblings[currentIndex + 1].id;
-  }
-
-  @override
-  Future<String?> findPreviousSiblingBlock(String blockId) async {
-    final parentId = await findParentId(blockId);
-    final currentIndex = await findBlockIndex(blockId);
-
-    List<Block> siblings;
-    if (parentId == null) {
-      siblings = _blocks;
-    } else {
-      final parent = _findBlockInRoots(parentId);
-      if (parent == null) return null;
-      siblings = parent.children;
-    }
-
-    if (currentIndex <= 0) {
-      return null;
-    }
-
-    return siblings[currentIndex - 1].id;
   }
 }

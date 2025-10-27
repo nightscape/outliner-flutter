@@ -56,3 +56,21 @@ class ToggleCollapseOperation extends Operation {
   @override
   String toString() => 'ToggleCollapse($blockId)';
 }
+
+class ArrowUpOperation extends Operation {
+  final String blockId;
+
+  const ArrowUpOperation(this.blockId);
+
+  @override
+  String toString() => 'ArrowUp($blockId)';
+}
+
+class ArrowDownOperation extends Operation {
+  final String blockId;
+
+  const ArrowDownOperation(this.blockId);
+
+  @override
+  String toString() => 'ArrowDown($blockId)';
+}

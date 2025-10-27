@@ -2,87 +2,110 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dartproptest/dartproptest.dart';
 import 'package:outliner_view/models/block.dart';
 import 'package:outliner_view/models/outliner_state.dart';
+import 'package:outliner_view/models/tree_constants.dart';
 import 'package:outliner_view/providers/outliner_provider.dart';
 import 'package:outliner_view/repositories/in_memory_outliner_repository.dart';
 
 List<Block> _getBlocks(OutlinerState state) {
   return state.maybeWhen(
-    loaded: (blocks, focusedBlockId) => blocks,
+    loaded: (rootBlock, _, __, ___) => rootBlock.children,
     orElse: () => [],
   );
 }
 
 class OutlinerModel {
-  final Map<String, String?> parentMap;
+  final Map<String, String> parentMap;
   final Map<String, List<String>> childrenMap;
   final Set<String> allBlockIds;
+  final String rootId;
 
   OutlinerModel({
     required this.parentMap,
     required this.childrenMap,
     required this.allBlockIds,
+    required this.rootId,
   });
 
   OutlinerModel.fromNotifier(OutlinerNotifier notifier)
     : parentMap = {},
       childrenMap = {},
-      allBlockIds = {} {
-    _buildModel(_getBlocks(notifier.state), null);
+      allBlockIds = {},
+      rootId = _getRootId(notifier.state) {
+    final root = notifier.state.whenOrNull(
+      loaded: (rootBlock, _, __, ___) => rootBlock,
+    );
+    if (root != null) {
+      _buildModel(root, null);
+    }
   }
 
-  void _buildModel(List<Block> blocks, String? parentId) {
-    for (var i = 0; i < blocks.length; i++) {
-      final block = blocks[i];
+  static String _getRootId(OutlinerState state) {
+    return state.whenOrNull(
+      loaded: (rootBlock, _, __, ___) => rootBlock.id,
+    ) ?? '';
+  }
+
+  void _buildModel(Block block, String? parentId) {
+    final isActualRoot = parentId == null;
+
+    if (isActualRoot) {
+      parentMap[block.id] = kRootParentId;
+      childrenMap[block.id] = block.children.map((c) => c.id).toList();
+    } else {
       allBlockIds.add(block.id);
       parentMap[block.id] = parentId;
+      childrenMap.putIfAbsent(parentId, () => []).add(block.id);
+      childrenMap[block.id] = block.children.map((c) => c.id).toList();
+    }
 
-      if (parentId != null) {
-        childrenMap.putIfAbsent(parentId, () => []).add(block.id);
-      }
-
-      if (block.hasChildren) {
-        _buildModel(block.children, block.id);
-      }
+    for (final child in block.children) {
+      _buildModel(child, block.id);
     }
   }
 
   OutlinerModel copy() {
     return OutlinerModel(
       parentMap: Map.from(parentMap),
-      childrenMap: childrenMap.map((k, v) => MapEntry(k, List.from(v))),
+      childrenMap: childrenMap.map((k, v) => MapEntry(k, List<String>.from(v))),
       allBlockIds: Set.from(allBlockIds),
+      rootId: rootId,
     );
   }
 
-  void updateAfterMove(String blockId, String? newParentId, int newIndex) {
-    if (newParentId != null) {
-      if (blockId == newParentId) return;
-      if (isDescendantOf(newParentId, blockId)) return;
-    }
+  void updateAfterMove(String blockId, String newParentId, int newIndex) {
+    if (blockId == newParentId) return;
+    if (isDescendantOf(newParentId, blockId)) return;
 
     final oldParentId = parentMap[blockId];
 
     if (oldParentId != null) {
       childrenMap[oldParentId]?.remove(blockId);
-      if (childrenMap[oldParentId]?.isEmpty ?? false) {
+      if ((childrenMap[oldParentId]?.isEmpty ?? false) &&
+          oldParentId != rootId) {
         childrenMap.remove(oldParentId);
       }
     }
 
     parentMap[blockId] = newParentId;
 
-    if (newParentId != null) {
-      final children = childrenMap.putIfAbsent(newParentId, () => []);
-      final clampedIndex = newIndex.clamp(0, children.length);
-      children.insert(clampedIndex, blockId);
+    final children = childrenMap.putIfAbsent(newParentId, () => []);
+    final existingIndex = children.indexOf(blockId);
+    if (existingIndex != -1) {
+      children.removeAt(existingIndex);
     }
+    final clampedIndex = newIndex.clamp(0, children.length);
+    children.insert(clampedIndex, blockId);
   }
 
   bool isDescendantOf(String potentialDescendant, String ancestor) {
-    String? current = potentialDescendant;
-    while (current != null) {
+    String current = potentialDescendant;
+    while (current != kRootParentId && current != rootId) {
       if (current == ancestor) return true;
-      current = parentMap[current];
+      final parent = parentMap[current];
+      if (parent == null) {
+        throw StateError('Block not found in parent map: $current');
+      }
+      current = parent;
     }
     return false;
   }
@@ -99,9 +122,7 @@ class OutlinerGenerators {
         final notifier = OutlinerNotifier(
           InMemoryOutlinerRepository(initializeSampleData: false),
         );
-        for (var block in blocks) {
-          notifier.addRootBlock(block);
-        }
+        // This is a workaround for synchronous generator - blocks will be added in test setup
         return notifier;
       });
     });
@@ -149,24 +170,21 @@ Generator<Action<OutlinerNotifier, OutlinerModel>> moveActionGen(
   }
 
   return Gen.elementOf(allBlocks).flatMap((blockId) {
-    final possibleTargets = <({String? parentId, int index})>[];
+    final possibleTargets = <({String parentId, int index})>[];
 
-    final blocks = _getBlocks(notifier.state);
-    final rootCount = blocks.length;
-    for (var i = 0; i <= rootCount; i++) {
-      possibleTargets.add((parentId: null, index: i));
+    // Add root as possible target
+    final rootChildren = model.childrenMap[model.rootId] ?? [];
+    for (var i = 0; i <= rootChildren.length; i++) {
+      possibleTargets.add((parentId: model.rootId, index: i));
     }
 
     for (var targetBlockId in allBlocks) {
       if (targetBlockId == blockId) continue;
       if (model.isDescendantOf(targetBlockId, blockId)) continue;
 
-      final targetBlock = _findBlock(blocks, targetBlockId);
-      if (targetBlock != null) {
-        final childCount = targetBlock.children.length;
-        for (var i = 0; i <= childCount; i++) {
-          possibleTargets.add((parentId: targetBlockId, index: i));
-        }
+      final childCount = model.childrenMap[targetBlockId]?.length ?? 0;
+      for (var i = 0; i <= childCount; i++) {
+        possibleTargets.add((parentId: targetBlockId, index: i));
       }
     }
 

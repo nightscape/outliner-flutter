@@ -18,9 +18,15 @@ class DemoScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: () {
-              ref
-                  .read(outlinerProvider.notifier)
-                  .addRootBlock(Block.create(content: ''));
+              final state = ref.read(outlinerProvider);
+              final rootId = state.whenOrNull(
+                loaded: (rootBlock, _, __, ___) => rootBlock.id,
+              );
+              if (rootId != null) {
+                ref
+                    .read(outlinerProvider.notifier)
+                    .addChildBlock(rootId, Block.create(content: ''));
+              }
             },
             tooltip: 'Add new block',
           ),
@@ -43,30 +49,6 @@ class DemoScreen extends ConsumerWidget {
         ],
       ),
       body: OutlinerListView(
-        // Use Material Design icons for bullet points
-        bulletBuilder: (context, block, hasChildren, isCollapsed, onToggle) {
-          return GestureDetector(
-            onTap: onToggle,
-            child: Container(
-              width: 20,
-              height: 20,
-              margin: const EdgeInsets.only(top: 2),
-              child: hasChildren
-                  ? Icon(
-                      isCollapsed ? Icons.arrow_right : Icons.arrow_drop_down,
-                      size: 20,
-                    )
-                  : Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-            ),
-          );
-        },
         // Material-style loading indicator
         loadingBuilder: (context) {
           return const Center(child: CircularProgressIndicator());
@@ -123,19 +105,37 @@ class DemoScreen extends ConsumerWidget {
         // Apply Material theme colors to block styles
         config: OutlinerConfig(
           blockStyle: BlockStyle(
-            bulletColor: Theme.of(context).colorScheme.primary,
-            textStyle: TextStyle(
-              fontSize: 16,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
+            bulletColor: Theme.of(context).colorScheme.error,
+            textStyle:
+                Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ) ??
+                TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+            editingTextStyle:
+                Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ) ??
+                TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
           ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          ref
-              .read(outlinerProvider.notifier)
-              .addRootBlock(Block.create(content: ''));
+          final state = ref.read(outlinerProvider);
+          final rootId = state.whenOrNull(
+            loaded: (rootBlock, _, __, ___) => rootBlock.id,
+          );
+          if (rootId != null) {
+            ref
+                .read(outlinerProvider.notifier)
+                .addChildBlock(rootId, Block.create(content: ''));
+          }
         },
         tooltip: 'Add new block',
         child: const Icon(Icons.add),

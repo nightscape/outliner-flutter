@@ -1,159 +1,223 @@
 import 'package:outliner_view/models/block.dart';
+import 'package:outliner_view/models/tree_constants.dart';
 import 'package:outliner_view/providers/outliner_provider.dart';
 import 'test_context.dart';
 
 class OutlinerModel {
-  final Map<String, String?> parentMap;
-  final Map<String, List<String>> childrenMap;
-  final Set<String> allBlockIds;
+  final Map<String, String> parentMap = {};
+  final Map<String, List<String>> childrenMap = {};
+  final Map<String, String> contentMap = {};
+  final Map<String, bool> collapseStateMap = {};
+  final Set<String> allBlockIds = {};
+  late String rootId;
 
-  OutlinerModel({
-    required this.parentMap,
-    required this.childrenMap,
-    required this.allBlockIds,
-  });
-
-  OutlinerModel.fromNotifier(OutlinerNotifier notifier)
-    : parentMap = {},
-      childrenMap = {},
-      allBlockIds = {} {
+  OutlinerModel.fromNotifier(OutlinerNotifier notifier) {
     notifier.state.whenOrNull(
-      loaded: (blocks, focusedBlockId) => _buildModel(blocks, null),
+      loaded: (rootBlock, focusedBlockId, cursorPosition, viewRootId) {
+        _buildTree(rootBlock, parentId: null);
+      },
     );
   }
 
-  OutlinerModel.fromContext(TestContext context)
-    : parentMap = {},
-      childrenMap = {},
-      allBlockIds = {} {
-    _buildModel(context.blocks, null);
+  OutlinerModel.fromContext(TestContext context) {
+    final root = context.rootBlock;
+    if (root != null) {
+      _buildTree(root, parentId: null);
+    }
   }
 
-  void _buildModel(List<Block> blocks, String? parentId) {
-    for (var block in blocks) {
-      allBlockIds.add(block.id);
+  void _buildTree(Block block, {String? parentId}) {
+    final isActualRoot = parentId == null;
+
+    if (isActualRoot) {
+      rootId = block.id;
+      parentMap[block.id] = kRootParentId;
+    } else {
       parentMap[block.id] = parentId;
+      allBlockIds.add(block.id);
+    }
 
-      if (parentId != null) {
-        childrenMap.putIfAbsent(parentId, () => []).add(block.id);
-      }
+    contentMap[block.id] = block.content;
+    collapseStateMap[block.id] = block.isCollapsed;
 
-      if (block.hasChildren) {
-        _buildModel(block.children, block.id);
-      }
+    final childIds = block.children.map((child) => child.id).toList();
+    childrenMap[block.id] = childIds;
+
+    for (final child in block.children) {
+      _buildTree(child, parentId: block.id);
     }
   }
 
-  void updateAfterMove(String blockId, String? newParentId) {
-    if (newParentId != null) {
-      if (blockId == newParentId) return;
-      if (isDescendantOf(newParentId, blockId)) return;
-    }
-
-    final oldParentId = parentMap[blockId];
-
-    if (oldParentId != null) {
-      childrenMap[oldParentId]?.remove(blockId);
-      if (childrenMap[oldParentId]?.isEmpty ?? false) {
-        childrenMap.remove(oldParentId);
-      }
-    }
-
-    parentMap[blockId] = newParentId;
+  /// Returns all block IDs that are not the root block.
+  /// These are the blocks that can be manipulated (moved, indented, etc.)
+  Set<String> getNonRootBlockIds() {
+    return allBlockIds;
   }
 
   bool isDescendantOf(String potentialDescendant, String ancestor) {
-    String? current = potentialDescendant;
-    while (current != null) {
+    String current = potentialDescendant;
+    while (current != kRootParentId && current != rootId) {
       if (current == ancestor) return true;
-      current = parentMap[current];
+      final parent = parentMap[current];
+      if (parent == null) break;
+      current = parent;
     }
     return false;
+  }
+
+  void updateAfterMove(String blockId, String newParentId, int newIndex) {
+    assert(blockId != newParentId, 'Cannot make block a child of itself');
+    assert(
+      !isDescendantOf(newParentId, blockId),
+      'Cannot move block into its descendant',
+    );
+
+    final oldParentId = parentMap[blockId];
+    if (oldParentId != null) {
+      childrenMap[oldParentId]?.remove(blockId);
+    }
+
+    parentMap[blockId] = newParentId;
+    final siblings = childrenMap.putIfAbsent(newParentId, () => <String>[]);
+    final existingIndex = siblings.indexOf(blockId);
+    if (existingIndex != -1) {
+      siblings.removeAt(existingIndex);
+    }
+    final insertIndex = newIndex.clamp(0, siblings.length);
+    siblings.insert(insertIndex, blockId);
+  }
+
+  void moveBlock(String blockId, String newParentId, int newIndex) {
+    if (!allBlockIds.contains(blockId)) {
+      throw StateError('moveBlock: blockId $blockId does not exist in model');
+    }
+    if (blockId == newParentId) {
+      throw StateError(
+        'moveBlock: cannot make block $blockId a child of itself',
+      );
+    }
+    if (isDescendantOf(newParentId, blockId)) {
+      throw StateError(
+        'moveBlock: cannot move $blockId into its descendant $newParentId',
+      );
+    }
+
+    updateAfterMove(blockId, newParentId, newIndex);
+  }
+
+  void indentBlock(String blockId) {
+    if (!allBlockIds.contains(blockId)) return;
+
+    final parentId = parentMap[blockId];
+    if (parentId == null) {
+      throw StateError('Block not found in parent map: $blockId');
+    }
+
+    final siblings = childrenMap[parentId] ?? <String>[];
+    final blockIndex = siblings.indexOf(blockId);
+    if (blockIndex <= 0) return;
+
+    final newParentId = siblings[blockIndex - 1];
+    final newParentChildren = childrenMap[newParentId] ?? <String>[];
+    moveBlock(blockId, newParentId, newParentChildren.length);
+  }
+
+  void outdentBlock(String blockId) {
+    if (!allBlockIds.contains(blockId)) return;
+
+    final parentId = parentMap[blockId];
+    if (parentId == null) {
+      throw StateError('Block not found in parent map: $blockId');
+    }
+    if (parentId == rootId) {
+      throw StateError('Cannot outdent direct child of root: $blockId');
+    }
+
+    final grandParentId = parentMap[parentId];
+    if (grandParentId == null) {
+      throw StateError('Parent block not found in parent map: $parentId');
+    }
+
+    final parentSiblings = childrenMap[grandParentId] ?? <String>[];
+    final parentIndex = parentSiblings.indexOf(parentId);
+    if (parentIndex == -1) return;
+
+    moveBlock(blockId, grandParentId, parentIndex + 1);
+  }
+
+  void addBlock(
+    String blockId,
+    String parentId,
+    int index, {
+    String content = '',
+  }) {
+    if (allBlockIds.contains(blockId)) return;
+
+    allBlockIds.add(blockId);
+    parentMap[blockId] = parentId;
+    contentMap[blockId] = content;
+
+    final siblings = childrenMap.putIfAbsent(parentId, () => <String>[]);
+    final insertIndex = index.clamp(0, siblings.length);
+    siblings.insert(insertIndex, blockId);
+  }
+
+  void splitBlock(String blockId, String newBlockId, int cursorPosition) {
+    if (!allBlockIds.contains(blockId)) return;
+
+    final content = contentMap[blockId] ?? '';
+    final safePosition = cursorPosition.clamp(0, content.length);
+    final beforeCursor = content.substring(0, safePosition);
+    final afterCursor = content.substring(safePosition);
+
+    contentMap[blockId] = beforeCursor;
+
+    final parentId = parentMap[blockId];
+    if (parentId == null) {
+      throw StateError('Block not found in parent map: $blockId');
+    }
+    final siblings = childrenMap[parentId] ?? <String>[];
+    final blockIndex = siblings.indexOf(blockId);
+    if (blockIndex == -1) return;
+
+    addBlock(newBlockId, parentId, blockIndex + 1, content: afterCursor);
+  }
+
+  void toggleCollapse(String blockId) {
+    collapseStateMap[blockId] = !(collapseStateMap[blockId] ?? false);
   }
 
   void clear() {
     parentMap.clear();
     childrenMap.clear();
+    contentMap.clear();
+    collapseStateMap.clear();
     allBlockIds.clear();
-  }
-
-  void copyFrom(OutlinerModel other) {
-    parentMap.clear();
-    childrenMap.clear();
-    allBlockIds.clear();
-    parentMap.addAll(other.parentMap);
-    childrenMap.addAll(other.childrenMap);
-    allBlockIds.addAll(other.allBlockIds);
   }
 }
 
 class UIOutlinerModel extends OutlinerModel {
-  final Map<String, bool> collapseStateMap;
-
-  UIOutlinerModel({
-    required super.parentMap,
-    required super.childrenMap,
-    required super.allBlockIds,
-    required this.collapseStateMap,
-  });
-
-  UIOutlinerModel.fromNotifier(OutlinerNotifier notifier)
-    : collapseStateMap = {},
-      super(parentMap: {}, childrenMap: {}, allBlockIds: {}) {
-    notifier.state.whenOrNull(
-      loaded: (blocks, focusedBlockId) => _buildModelWithCollapse(blocks, null),
-    );
-  }
-
-  UIOutlinerModel.fromContext(TestContext context)
-    : collapseStateMap = {},
-      super(parentMap: {}, childrenMap: {}, allBlockIds: {}) {
-    _buildModelWithCollapse(context.blocks, null);
-  }
-
-  void _buildModelWithCollapse(List<Block> blocks, String? parentId) {
-    for (var block in blocks) {
-      allBlockIds.add(block.id);
-      parentMap[block.id] = parentId;
-      collapseStateMap[block.id] = block.isCollapsed;
-
-      if (parentId != null) {
-        childrenMap.putIfAbsent(parentId, () => []).add(block.id);
-      }
-
-      if (block.hasChildren) {
-        _buildModelWithCollapse(block.children, block.id);
-      }
-    }
-  }
-
-  bool isBlockVisible(String blockId) {
-    String? current = blockId;
-    while (current != null) {
-      final parentId = parentMap[current];
-      if (parentId != null) {
-        final parentCollapsed = collapseStateMap[parentId] ?? false;
-        if (parentCollapsed) return false;
-      }
-      current = parentId;
-    }
-    return true;
-  }
+  // ignore: use_super_parameters
+  UIOutlinerModel.fromContext(TestContext context) : super.fromContext(context);
 
   List<String> get visibleBlockIds {
     return allBlockIds.where(isBlockVisible).toList();
   }
 
-  @override
-  void clear() {
-    super.clear();
-    collapseStateMap.clear();
-  }
-
-  @override
-  void copyFrom(covariant UIOutlinerModel other) {
-    super.copyFrom(other);
-    collapseStateMap.clear();
-    collapseStateMap.addAll(other.collapseStateMap);
+  bool isBlockVisible(String blockId) {
+    String current = blockId;
+    while (true) {
+      final parentId = parentMap[current];
+      if (parentId == null) {
+        throw StateError('Block not found in parent map: $current');
+      }
+      // Reached the root or the root's sentinel parent - block is visible
+      if (parentId == kRootParentId || parentId == rootId) {
+        return true;
+      }
+      final parentCollapsed = collapseStateMap[parentId] ?? false;
+      if (parentCollapsed) return false;
+      current = parentId;
+    }
   }
 }
