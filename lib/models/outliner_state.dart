@@ -1,18 +1,18 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'block.dart';
 
 part 'outliner_state.freezed.dart';
 
 enum CursorPosition { start, end }
 
+/// State of the outliner, always loaded and ready to use.
+/// Loading and error handling should be done at the application level
+/// before instantiating the outliner.
 @freezed
-class OutlinerState with _$OutlinerState {
-  const factory OutlinerState.loading() = _Loading;
-  const factory OutlinerState.loaded(
-    Block rootBlock, {
+class OutlinerState<T> with _$OutlinerState<T> {
+  const factory OutlinerState({
+    required T rootBlock,
     String? focusedBlockId,
     @Default(CursorPosition.end) CursorPosition cursorPosition,
     String? viewRootId,
-  }) = _Loaded;
-  const factory OutlinerState.error(String message) = _Error;
+  }) = _OutlinerState<T>;
 }

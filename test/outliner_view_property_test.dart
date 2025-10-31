@@ -7,7 +7,6 @@ import 'package:outliner_view/repositories/in_memory_outliner_repository.dart';
 import 'package:outliner_view/widgets/outliner_list_view.dart';
 import 'operation_generators.dart';
 import 'operation_interpreter.dart';
-import 'outliner_model.dart';
 import 'property_test_base.dart';
 import 'test_context.dart';
 
@@ -20,34 +19,31 @@ class IdGenerator {
   }
 }
 
-Future<ProviderContainer> _createContainer({
+Future<(ProviderContainer, InMemoryOutlinerRepository)> _createContainer({
   List<Block> rootBlocks = const [],
   required IdGenerator sutIdGenerator,
 }) async {
+  final sutRepo = InMemoryOutlinerRepository(
+    initializeSampleData: false,
+    idGenerator: sutIdGenerator.next,
+  );
+
   final container = ProviderContainer(
     overrides: [
       outlinerProvider.overrideWith(
-        (ref) => OutlinerNotifier(
-          InMemoryOutlinerRepository(
-            initializeSampleData: false,
-            idGenerator: sutIdGenerator.next,
-          ),
-        ),
+        (ref) => OutlinerNotifier(sutRepo),
       ),
     ],
   );
 
   final notifier = container.read(outlinerProvider.notifier);
-  await notifier.loadBlocks();
-  final rootId = notifier.state.whenOrNull(
-    loaded: (rootBlock, _, __, ___) => rootBlock.id,
-  );
-  if (rootId != null) {
-    for (final block in rootBlocks) {
-      await notifier.addChildBlock(rootId, block);
-    }
+  await Future.delayed(const Duration(milliseconds: 10));
+  final rootBlock = notifier.state.rootBlock;
+  for (final block in rootBlocks) {
+    await notifier.addChildBlock(rootBlock, block);
+    await Future.delayed(const Duration(milliseconds: 10));
   }
-  return container;
+  return (container, sutRepo);
 }
 
 Future<void> _pumpOutliner(
@@ -57,9 +53,16 @@ Future<void> _pumpOutliner(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(
+      child: MaterialApp(
         home: Scaffold(
-          body: SizedBox(height: 600, width: 400, child: OutlinerListView()),
+          body: SizedBox(
+            height: 600,
+            width: 400,
+            child: OutlinerListView<Block>(
+              opsProvider: outlinerRepositoryProvider,
+              notifierProvider: outlinerProvider,
+            ),
+          ),
         ),
       ),
     ),
@@ -73,25 +76,38 @@ void main() {
       WidgetTester tester,
     ) async {
       final sutIdGenerator = IdGenerator();
-      final modelIdGenerator = IdGenerator();
-      await runPropertyTest<UIContext, UIOutlinerModel>(
+      final refIdGenerator = IdGenerator();
+      await runPropertyTest<Block, UIContext<Block>>(
         blockGenerator: BlockGenerators.blockList(),
         createContext: (blocks) async {
-          final container = await _createContainer(
+          final (container, sutRepo) = await _createContainer(
             rootBlocks: blocks,
             sutIdGenerator: sutIdGenerator,
           );
           await _pumpOutliner(tester, container);
-          return UIContext(tester, container, modelIdGenerator);
+
+          // Create reference repository with same initial blocks
+          final referenceRepo = InMemoryOutlinerRepository(
+            initializeSampleData: false,
+            idGenerator: refIdGenerator.next,
+          );
+          final refRoot = await referenceRepo.getRootBlock();
+          for (var block in blocks) {
+            await referenceRepo.addChildBlock(refRoot, block);
+          }
+
+          return UIContext<Block>(tester, container, sutIdGenerator, referenceRepo, outlinerProvider);
         },
-        createModel: (ctx) => UIOutlinerModel.fromContext(ctx),
-        interpreter: UIInterpreter(),
-        checkInvariants: checkUIInvariants,
+        interpreter: UIInterpreter<Block>(),
+        checkInvariants: (ctx, testContext) async {
+          await checkStructuralInvariants(ctx, testContext);
+        },
         tearDown: (ctx) async {
           ctx.container.dispose();
           await ctx.tester.pumpWidget(Container());
+          await ctx.tester.pumpAndSettle();
         },
-        onlyVisibleBlocks: true,
+        includeUIOperations: true,
       );
     });
   });

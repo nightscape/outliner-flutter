@@ -3,27 +3,35 @@ import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../config/block_style.dart';
-import '../models/block.dart';
+import '../core/block_ops.dart';
 import '../models/outliner_state.dart';
 import '../providers/outliner_provider.dart';
 
 /// A widget that represents a single block in the outliner.
 ///
 /// Supports inline editing, focus management, and customizable rendering
-/// via builder callbacks.
+/// via builder callbacks. Generic type [T] allows using any block type.
 ///
 /// Example with custom block rendering:
 /// ```dart
-/// BlockWidget(
+/// BlockWidget<rust.Block>(
 ///   block: myBlock,
+///   ops: rustBlockOps,
+///   notifierProvider: myNotifierProvider,
 ///   blockBuilder: (context, block) {
-///     return CustomRichTextWidget(content: block.content);
+///     return CustomRichTextWidget(content: ops.getContent(block));
 ///   },
 /// )
 /// ```
-class BlockWidget extends HookConsumerWidget {
+class BlockWidget<T> extends HookConsumerWidget {
   /// The block to display
-  final Block block;
+  final T block;
+
+  /// Operations for accessing block fields
+  final BlockOps<T> ops;
+
+  /// Provider for the outliner notifier (used for state-changing operations)
+  final StateNotifierProvider<OutlinerNotifier<T>, OutlinerState<T>>? notifierProvider;
 
   /// Nesting depth (0 for root blocks)
   final int depth;
@@ -36,7 +44,7 @@ class BlockWidget extends HookConsumerWidget {
 
   /// Custom builder for rendering block content when not editing.
   /// If null, displays plain text.
-  final Widget Function(BuildContext context, Block block)? blockBuilder;
+  final Widget Function(BuildContext context, T block)? blockBuilder;
 
   /// Custom builder for rendering block content when editing.
   /// Parameters: context, block, controller, focusNode, onSubmitted callback.
@@ -54,7 +62,7 @@ class BlockWidget extends HookConsumerWidget {
   /// ```
   final Widget Function(
     BuildContext context,
-    Block block,
+    T block,
     TextEditingController controller,
     FocusNode focusNode,
     VoidCallback onSubmitted,
@@ -66,7 +74,7 @@ class BlockWidget extends HookConsumerWidget {
   /// If null, uses default bullet rendering.
   final Widget Function(
     BuildContext context,
-    Block block,
+    T block,
     bool hasChildren,
     bool isCollapsed,
     VoidCallback? onToggle,
@@ -91,6 +99,8 @@ class BlockWidget extends HookConsumerWidget {
   const BlockWidget({
     super.key,
     required this.block,
+    required this.ops,
+    this.notifierProvider,
     this.depth = 0,
     this.keyboardShortcutsEnabled = true,
     this.style = const BlockStyle(),
@@ -107,18 +117,22 @@ class BlockWidget extends HookConsumerWidget {
     final controller = useTextEditingController();
     final focusNode = useFocusNode();
     final isEditing = useState(false);
-    final state = ref.watch(outlinerProvider);
+    final provider = notifierProvider ?? outlinerProvider;
+    final state = ref.watch(provider);
 
     // Track desired cursor position
     final desiredCursorPosition = useRef<CursorPosition?>(null);
     final shouldApplyCursorOverride = useRef(false);
 
+    final blockId = ops.getId(block);
+    final blockContent = ops.getContent(block);
+
     useEffect(() {
       if (!isEditing.value && !focusNode.hasFocus) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (controller.text != block.content) {
+          if (controller.text != blockContent) {
             final selection = _selectionForCursor(
-              block.content.length,
+              blockContent.length,
               shouldApplyCursorOverride.value
                   ? desiredCursorPosition.value
                   : null,
@@ -126,20 +140,18 @@ class BlockWidget extends HookConsumerWidget {
             );
 
             controller.value = controller.value.copyWith(
-              text: block.content,
+              text: blockContent,
               selection: selection,
             );
           }
         });
       }
       return null;
-    }, [block.id, block.content]);
+    }, [blockId, blockContent]);
 
     // Update desired cursor position from state
     useEffect(() {
-      final cursorPosition = state.whenOrNull(
-        loaded: (_, __, cursorPosition, ___) => cursorPosition,
-      );
+      final cursorPosition = state.cursorPosition;
       desiredCursorPosition.value = cursorPosition;
       return null;
     }, [state]);
@@ -147,7 +159,8 @@ class BlockWidget extends HookConsumerWidget {
     useEffect(() {
       void onFocusChange() {
         if (focusNode.hasFocus) {
-          ref.read(outlinerProvider.notifier).setFocusedBlock(block.id);
+          final provider = notifierProvider ?? outlinerProvider;
+          ref.read(provider.notifier).setFocusedBlock(blockId);
 
           if (shouldApplyCursorOverride.value) {
             _applyCursorPosition(controller, desiredCursorPosition.value);
@@ -163,11 +176,9 @@ class BlockWidget extends HookConsumerWidget {
     }, [focusNode]);
 
     useEffect(() {
-      final focusedBlockId = state.whenOrNull(
-        loaded: (_, focusedBlockId, __, ___) => focusedBlockId,
-      );
+      final focusedBlockId = state.focusedBlockId;
 
-      if (focusedBlockId == block.id && !focusNode.hasFocus) {
+      if (focusedBlockId == blockId && !focusNode.hasFocus) {
         isEditing.value = true;
         shouldApplyCursorOverride.value = true;
 
@@ -254,10 +265,9 @@ class BlockWidget extends HookConsumerWidget {
     TextEditingController controller,
     ValueNotifier<bool> isEditing,
   ) {
-    if (controller.text != block.content) {
-      ref
-          .read(outlinerProvider.notifier)
-          .updateBlock(block.id, controller.text);
+    final blockContent = ops.getContent(block);
+    if (controller.text != blockContent) {
+      ops.updateBlock(block, controller.text);
     }
     isEditing.value = false;
   }
@@ -272,23 +282,25 @@ class BlockWidget extends HookConsumerWidget {
       if (event.logicalKey == LogicalKeyboardKey.enter &&
           !HardwareKeyboard.instance.isShiftPressed) {
         final cursorPosition = controller.selection.baseOffset;
-        final notifier = ref.read(outlinerProvider.notifier);
+        final blockContent = ops.getContent(block);
+        final provider = notifierProvider ?? outlinerProvider;
+        final notifier = ref.read(provider.notifier);
 
-        // Save current content before splitting
-        if (controller.text != block.content) {
-          notifier.updateBlock(block.id, controller.text).then((_) {
-            notifier.splitBlock(block.id, cursorPosition);
+        if (controller.text != blockContent) {
+          notifier.updateBlock(block, controller.text).then((_) {
+            notifier.splitBlock(block, cursorPosition);
           });
         } else {
-          notifier.splitBlock(block.id, cursorPosition);
+          notifier.splitBlock(block, cursorPosition);
         }
         return KeyEventResult.handled;
       } else if (event.logicalKey == LogicalKeyboardKey.tab) {
-        final notifier = ref.read(outlinerProvider.notifier);
+        final provider = notifierProvider ?? outlinerProvider;
+        final notifier = ref.read(provider.notifier);
         if (HardwareKeyboard.instance.isShiftPressed) {
-          notifier.outdentBlock(block.id);
+          notifier.outdentBlock(block);
         } else {
-          notifier.indentBlock(block.id);
+          notifier.indentBlock(block);
         }
         return KeyEventResult.handled;
       } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
@@ -310,8 +322,10 @@ class BlockWidget extends HookConsumerWidget {
         cursorOffset == 0 || !text.substring(0, cursorOffset).contains('\n');
 
     if (isAtFirstLine) {
-      final notifier = ref.read(outlinerProvider.notifier);
-      notifier.focusPreviousBlock(block.id);
+      final blockId = ops.getId(block);
+      final provider = notifierProvider ?? outlinerProvider;
+      final notifier = ref.read(provider.notifier);
+      notifier.focusPreviousBlock(blockId);
       return true;
     }
     return false;
@@ -326,41 +340,48 @@ class BlockWidget extends HookConsumerWidget {
         !text.substring(cursorOffset).contains('\n');
 
     if (isAtLastLine) {
-      final notifier = ref.read(outlinerProvider.notifier);
-      notifier.focusNextBlock(block.id);
+      final blockId = ops.getId(block);
+      final provider = notifierProvider ?? outlinerProvider;
+      final notifier = ref.read(provider.notifier);
+      notifier.focusNextBlock(blockId);
       return true;
     }
     return false;
   }
 
   Widget _buildBullet(BuildContext context, WidgetRef ref) {
-    final onToggle = block.hasChildren
+    final hasChildren = ops.getChildren(block).isNotEmpty;
+    final onToggle = hasChildren
         ? () {
-            ref.read(outlinerProvider.notifier).toggleBlockCollapse(block.id);
+            final provider = notifierProvider ?? outlinerProvider;
+            final notifier = ref.read(provider.notifier);
+            notifier.toggleBlockCollapse(block);
           }
         : null;
 
     Widget bullet;
+
+    final isCollapsed = ops.getIsCollapsed(block);
 
     // Use custom builder if provided
     if (bulletBuilder != null) {
       bullet = bulletBuilder!(
         context,
         block,
-        block.hasChildren,
-        block.isCollapsed,
+        hasChildren,
+        isCollapsed,
         onToggle,
       );
     } else {
       // Default bullet implementation
       bullet = GestureDetector(
-        key: ValueKey('collapse-indicator-${block.id}'),
+        key: ValueKey('collapse-indicator-${ops.getId(block)}'),
         onTap: onToggle,
         child: Container(
           width: style.collapseIconSize,
           height: style.collapseIconSize,
           margin: const EdgeInsets.only(top: 2),
-          child: block.hasChildren
+          child: hasChildren
               ? _buildCollapseIcon()
               : _buildSimpleBullet(context),
         ),
@@ -376,10 +397,11 @@ class BlockWidget extends HookConsumerWidget {
   }
 
   Widget _buildCollapseIcon() {
+    final isCollapsed = ops.getIsCollapsed(block);
     // Simple platform-agnostic collapse indicator using CustomPaint
     return CustomPaint(
       painter: _ArrowPainter(
-        isCollapsed: block.isCollapsed,
+        isCollapsed: isCollapsed,
         color: style.bulletColor ?? const Color(0xFF000000),
       ),
     );
@@ -449,20 +471,27 @@ class BlockWidget extends HookConsumerWidget {
     // Default TextField implementation
     final textField = Padding(
       padding: style.contentPadding,
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        autofocus: false,
-        maxLines: null,
-        decoration:
-            textFieldDecorationBuilder?.call(context) ??
-            InputDecoration(
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: EdgeInsets.zero,
-            ),
-        style: style.editingTextStyle,
-        onSubmitted: (_) => onSubmitted(),
+      child: Actions(
+        actions: {
+          // Disable focus traversal for Tab key
+          NextFocusIntent: DoNothingAction(consumesKey: false),
+          PreviousFocusIntent: DoNothingAction(consumesKey: false),
+        },
+        child: TextField(
+          controller: controller,
+          focusNode: focusNode,
+          autofocus: false,
+          maxLines: null,
+          decoration:
+              textFieldDecorationBuilder?.call(context) ??
+              InputDecoration(
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+          style: style.editingTextStyle,
+          onSubmitted: (_) => onSubmitted(),
+        ),
       ),
     );
 
@@ -478,6 +507,8 @@ class BlockWidget extends HookConsumerWidget {
   }
 
   Widget _buildDisplayContent(BuildContext context) {
+    final content = ops.getContent(block);
+
     // Use custom builder if provided
     if (blockBuilder != null) {
       return Padding(
@@ -490,8 +521,8 @@ class BlockWidget extends HookConsumerWidget {
     return Padding(
       padding: style.contentPadding,
       child: Text(
-        block.content.isEmpty ? style.emptyBlockText : block.content,
-        style: block.content.isEmpty ? style.emptyTextStyle : style.textStyle,
+        content.isEmpty ? style.emptyBlockText : content,
+        style: content.isEmpty ? style.emptyTextStyle : style.textStyle,
       ),
     );
   }

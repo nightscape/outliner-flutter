@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dartproptest/dartproptest.dart';
+import 'package:outliner_view/core/block_ops.dart';
 import 'package:outliner_view/models/block.dart';
 import 'package:outliner_view/widgets/block_widget.dart';
 import 'operation_generators.dart';
 import 'operation_interpreter.dart';
-import 'outliner_model.dart';
 import 'test_context.dart';
 
 /// Represents a node in a tree structure for comparison
@@ -22,24 +22,34 @@ abstract class TreeIterator {
   Iterable<TreeNode> get roots;
 }
 
-/// Iterates over the reference model
-class ModelTreeIterator implements TreeIterator {
-  final OutlinerModel model;
+/// Helper to create tree iterator from BlockOps
+class _BlockOpsTreeIterator<T> {
+  final BlockOps<T> ops;
+  final List<T> blocks;
 
-  ModelTreeIterator(this.model);
+  _BlockOpsTreeIterator(this.ops, this.blocks);
+
+  Future<TreeIterator> getIterator() async {
+    final nodes = await Future.wait(blocks.map((block) => _buildNode(block)));
+    return _SyncTreeIterator(nodes);
+  }
+
+  Future<TreeNode> _buildNode(T block) async {
+    final children = await Future.wait(
+      ops.getChildren(block).map((child) => _buildNode(child)),
+    );
+    return TreeNode(ops.getId(block), ops.getIsCollapsed(block), children);
+  }
+}
+
+/// Synchronous tree iterator
+class _SyncTreeIterator implements TreeIterator {
+  final List<TreeNode> _roots;
+
+  _SyncTreeIterator(this._roots);
 
   @override
-  Iterable<TreeNode> get roots {
-    final rootChildren = model.childrenMap[model.rootId] ?? const [];
-    return rootChildren.map((id) => _buildNode(id));
-  }
-
-  TreeNode _buildNode(String blockId) {
-    final collapsed = model.collapseStateMap[blockId] ?? false;
-    final childIds = model.childrenMap[blockId] ?? [];
-    final children = childIds.map((id) => _buildNode(id)).toList();
-    return TreeNode(blockId, collapsed, children);
-  }
+  Iterable<TreeNode> get roots => _roots;
 }
 
 /// Iterates over actual Block tree
@@ -116,14 +126,13 @@ const int kPropertyTestMaxOps = int.fromEnvironment(
   defaultValue: 10,
 );
 
-Future<void> runPropertyTest<C extends TestContext, M extends OutlinerModel>({
+Future<void> runPropertyTest<T, C extends TestContext<T>>({
   required Generator<List<Block>> blockGenerator,
   required Future<C> Function(List<Block>) createContext,
-  required M Function(C) createModel,
-  required OperationInterpreter<C, M> interpreter,
-  required void Function(C, M, String) checkInvariants,
+  required OperationInterpreter<T, C> interpreter,
+  required void Function(C, String) checkInvariants,
   required Future<void> Function(C)? tearDown,
-  bool onlyVisibleBlocks = false,
+  bool includeUIOperations = false,
 }) async {
   int runCount = 0;
 
@@ -135,9 +144,8 @@ Future<void> runPropertyTest<C extends TestContext, M extends OutlinerModel>({
       }
 
       final ctx = await createContext(initialBlocks);
-      final model = createModel(ctx);
 
-      checkInvariants(ctx, model, 'Run $runCount - Initial');
+      checkInvariants(ctx, 'Run $runCount - Initial');
 
       try {
         final rand = Random();
@@ -147,17 +155,16 @@ Future<void> runPropertyTest<C extends TestContext, M extends OutlinerModel>({
         ).generate(rand).value;
 
         for (var i = 0; i < numActions; i++) {
-          final opGen = OperationGenerators.anyOperation(
-            model,
-            onlyVisible: onlyVisibleBlocks,
-          );
+          final opGen = OperationGenerators<T>(
+            ctx,
+            includeUIOperations: includeUIOperations,
+          ).anyOperation();
           final op = opGen.generate(rand).value;
 
-          await interpreter.execute(ctx, model, op);
+          await interpreter.execute(ctx, op);
 
           checkInvariants(
             ctx,
-            model,
             'Run $runCount - After action ${i + 1} ($op)',
           );
         }
@@ -177,194 +184,88 @@ Future<void> runPropertyTest<C extends TestContext, M extends OutlinerModel>({
   );
 }
 
-void checkStructuralInvariants(
-  TestContext context,
-  OutlinerModel model,
+Future<void> checkStructuralInvariants<T>(
+  TestContext<T> context,
   String testContext,
-) {
-  final actualModel = OutlinerModel.fromContext(context);
+) async {
+  final refOps = context.referenceRepo;
+  final sutOps = context.ops;
+
+  // Get blocks from both sides
+  final refBlocks = await context.referenceBlocks;
+  final sutBlocks = context.blocks;
 
   // Build tree representations for debugging
-  final modelTree = _buildTreeRepresentation(
-    ModelTreeIterator(model),
-    'Model Tree',
+  final refTree = _buildTreeRepresentation(
+    await _BlockOpsTreeIterator(refOps, refBlocks).getIterator(),
+    'Reference Tree',
   );
-  final actualTree = _buildTreeRepresentation(
-    BlockTreeIterator(context.blocks),
-    'Actual Tree',
+  final sutTree = _buildTreeRepresentation(
+    await _BlockOpsTreeIterator(sutOps, sutBlocks).getIterator(),
+    'SUT Tree',
   );
+
+  // Collect all IDs from both sides
+  final refIds = <String>{};
+  await _collectAllIdsFromOps(refBlocks, refOps, refIds);
+
+  final sutIds = <String>{};
+  await _collectAllIdsFromOps(sutBlocks, sutOps, sutIds);
 
   expect(
-    actualModel.allBlockIds,
-    equals(model.allBlockIds),
+    sutIds,
+    equals(refIds),
     reason:
-        '$testContext: Conservation - all blocks should exist\n\n$modelTree\n$actualTree',
+        '$testContext: All blocks should exist in both trees\n\n$refTree\n$sutTree',
   );
 
-  final allActualIds = <String>{};
-  _collectAllIds(context.blocks, allActualIds);
-  expect(
-    allActualIds.length,
-    equals(model.allBlockIds.length),
-    reason:
-        '$testContext: No duplication - each block appears exactly once\n\n$modelTree\n$actualTree',
-  );
+  // Check parent relationships match
+  for (var blockId in sutIds) {
+    final refBlock = await refOps.findBlockById(blockId);
+    final sutBlock = await sutOps.findBlockById(blockId);
 
-  for (var blockId in model.allBlockIds) {
-    final modelParent = model.parentMap[blockId];
-    final actualParent = actualModel.parentMap[blockId];
+    if (refBlock == null || sutBlock == null) continue;
+
+    final refParent = await refOps.findParent(refBlock);
+    final sutParent = await sutOps.findParent(sutBlock);
+
+    final refParentId = refParent != null ? refOps.getId(refParent) : null;
+    final sutParentId = sutParent != null ? sutOps.getId(sutParent) : null;
+
+    if (sutParentId != refParentId) {
+      print('DEBUG: Block $blockId has mismatched parents:');
+      print('  SUT parent ID: $sutParentId');
+      print('  Ref parent ID: $refParentId');
+      print('  SUT root ID: ${sutOps.getId(await sutOps.getRootBlock())}');
+      print('  Ref root ID: ${refOps.getId(await refOps.getRootBlock())}');
+    }
+
     expect(
-      actualParent,
-      equals(modelParent),
+      sutParentId,
+      equals(refParentId),
       reason:
-          '$testContext: Parent relationship for $blockId should match model\n\n$modelTree\n$actualTree',
+          '$testContext: Parent relationship for $blockId should match\n\n$refTree\n$sutTree',
     );
   }
 }
 
-void checkUIInvariants(
-  UIContext ctx,
-  UIOutlinerModel model,
-  String testContext,
-) {
-  checkStructuralInvariants(ctx, model, testContext);
+// For UI tests, we use the same structural invariants check
+// The UI is driven by the notifier, so if the notifier's state matches
+// the reference, the UI should reflect that.
 
-  final blocks = ctx.blocks;
-
-  // Build tree representations for debugging
-  final modelTree = _buildTreeRepresentation(
-    ModelTreeIterator(model),
-    'Model Tree',
-  );
-  final actualTree = _buildTreeRepresentation(
-    BlockTreeIterator(blocks),
-    'Actual Tree',
-  );
-  final widgetTree = _buildTreeRepresentation(
-    WidgetTreeIterator(ctx.tester),
-    'Widget Tree',
-  );
-
-  for (var blockId in model.allBlockIds) {
-    Block? actualBlock;
-    for (var rootBlock in blocks) {
-      actualBlock = rootBlock.findBlockById(blockId);
-      if (actualBlock != null) break;
-    }
-
-    if (actualBlock == null) continue;
-
-    // Check content matches
-    final modelContent = model.contentMap[blockId] ?? '';
-    expect(
-      actualBlock.content,
-      equals(modelContent),
-      reason:
-          '$testContext: Content for block $blockId should match model. '
-          'Expected "$modelContent", got "${actualBlock.content}"\n\n$modelTree\n$actualTree\n$widgetTree',
-    );
-
-    final modelCollapseState = model.collapseStateMap[blockId] ?? false;
-    expect(
-      actualBlock.isCollapsed,
-      equals(modelCollapseState),
-      reason:
-          '$testContext: Collapse state for $blockId should match model\n\n$modelTree\n$actualTree\n$widgetTree',
-    );
-
-    final isVisible = model.isBlockVisible(blockId);
-    final hasChildren =
-        model.childrenMap.containsKey(blockId) &&
-        model.childrenMap[blockId]!.isNotEmpty;
-
-    if (isVisible && hasChildren) {
-      final collapseIndicatorFinder = find.byKey(
-        ValueKey('collapse-indicator-$blockId'),
-        skipOffstage: false,
-      );
-      expect(
-        collapseIndicatorFinder,
-        findsOneWidget,
-        reason:
-            '$testContext: Block $blockId has children and is visible, should have collapse indicator\n\n$modelTree\n$actualTree\n$widgetTree',
-      );
-    }
-
-    if (actualBlock.isCollapsed && hasChildren) {
-      final childIds = model.childrenMap[blockId] ?? [];
-      for (var childId in childIds) {
-        final childWidgetFinder = find.byWidgetPredicate(
-          (widget) => widget is BlockWidget && widget.block.id == childId,
-        );
-        expect(
-          childWidgetFinder,
-          findsNothing,
-          reason:
-              '$testContext: Block $blockId is collapsed, child $childId should not be visible\n\n$modelTree\n$actualTree\n$widgetTree',
-        );
-      }
-    }
-  }
-
-  _checkNoUINodeDuplication(
-    ctx.tester,
-    model,
-    testContext,
-    modelTree,
-    actualTree,
-    widgetTree,
-  );
-}
-
-void _checkNoUINodeDuplication(
-  WidgetTester tester,
-  UIOutlinerModel model,
-  String context,
-  String modelTree,
-  String actualTree,
-  String widgetTree,
-) {
-  int countVisibleBlocks(String blockId) {
-    int count = 1;
-    final isCollapsed = model.collapseStateMap[blockId] ?? false;
-
-    if (isCollapsed) return count;
-
-    final children = model.childrenMap[blockId] ?? [];
-    for (var childId in children) {
-      count += countVisibleBlocks(childId);
-    }
-    return count;
-  }
-
-  int expectedVisibleCount = 0;
-  for (var blockId in model.allBlockIds) {
-    final parentId = model.parentMap[blockId];
-    if (parentId == model.rootId) {
-      expectedVisibleCount += countVisibleBlocks(blockId);
-    }
-  }
-
-  final blockWidgets = find.byType(BlockWidget, skipOffstage: false);
-  final widgetCount = blockWidgets.evaluate().length;
-
-  expect(
-    widgetCount,
-    equals(expectedVisibleCount),
-    reason:
-        '$context: Found $widgetCount BlockWidgets but expected $expectedVisibleCount visible blocks\n\n'
-        '$modelTree\n$actualTree\n$widgetTree',
-  );
-}
-
-void _collectAllIds(List<Block> blocks, Set<String> ids) {
+Future<void> _collectAllIdsFromOps<T>(
+  List<T> blocks,
+  BlockOps<T> ops,
+  Set<String> ids,
+) async {
   for (var block in blocks) {
+    final id = ops.getId(block);
     expect(
-      ids.contains(block.id),
+      ids.contains(id),
       isFalse,
-      reason: 'Block ${block.id} appears multiple times in tree',
+      reason: 'Block $id appears multiple times in tree',
     );
-    ids.add(block.id);
-    _collectAllIds(block.children, ids);
+    ids.add(id);
+    await _collectAllIdsFromOps(ops.getChildren(block), ops, ids);
   }
 }

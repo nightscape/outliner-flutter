@@ -1,16 +1,24 @@
+import 'dart:async';
+
+import '../core/block_ops.dart';
 import '../models/block.dart';
-import '../models/tree_constants.dart';
-import 'outliner_repository.dart';
 
-class InMemoryOutlinerRepository implements OutlinerRepository {
-  late Block _root;
+/// Generic base implementation of BlockOps with in-memory storage.
+/// Use this when working with custom block types (e.g., FRB-generated).
+///
+/// Subclasses must implement BlockAccessOps and BlockCreationOps methods
+/// for their specific block type.
+abstract class InMemoryOutlinerRepositoryBase<T> implements BlockOps<T> {
+  late T _root;
   final String Function()? _idGenerator;
+  final _changeController = StreamController<T>.broadcast();
 
-  InMemoryOutlinerRepository({
+  InMemoryOutlinerRepositoryBase({
     bool initializeSampleData = true,
     String Function()? idGenerator,
   }) : _idGenerator = idGenerator {
-    _root = Block.create(
+    _root = create(
+      id: _idGenerator?.call(),
       content: '',
       isCollapsed: false,
     );
@@ -20,120 +28,188 @@ class InMemoryOutlinerRepository implements OutlinerRepository {
     }
   }
 
+  @override
+  Stream<T> get changeStream => _changeController.stream;
+
+  void dispose() {
+    _changeController.close();
+  }
+
+  // BlockAccessOps and BlockCreationOps methods must be implemented by subclasses
+
   void _initializeSampleData() {
     final sampleChildren = [
-      Block.create(
+      create(
         content: 'Welcome to Flutter Outliner',
         children: [
-          Block.create(content: 'This is a LogSeq-inspired outliner'),
-          Block.create(content: 'Try editing blocks by clicking on them'),
+          create(content: 'This is a LogSeq-inspired outliner'),
+          create(content: 'Try editing blocks by clicking on them'),
         ],
       ),
-      Block.create(
+      create(
         content: 'Features',
         children: [
-          Block.create(
+          create(
             content: 'Hierarchical blocks',
-            children: [Block.create(content: 'Nested as deep as you want')],
+            children: [create(content: 'Nested as deep as you want')],
           ),
-          Block.create(content: 'Collapsible sections'),
-          Block.create(content: 'Block-based editing'),
+          create(content: 'Collapsible sections'),
+          create(content: 'Block-based editing'),
         ],
       ),
-      Block.create(content: 'Start typing to create your outline...'),
+      create(content: 'Start typing to create your outline...'),
     ];
 
     _setRootChildren(sampleChildren);
   }
 
-  void _setRootChildren(List<Block> children) {
-    _root = _root.copyWith(children: children, updatedAt: DateTime.now());
+  void _setRootChildren(List<T> children) {
+    _root = copyWith(_root, children: children);
+    _changeController.add(_root);
+  }
+
+  // BlockTreeOps implementation
+  @override
+  List<T> getTopLevelBlocks() {
+    return getChildren(_root);
   }
 
   @override
-  Future<Block> getRootBlock() async {
+  bool isDescendantOf(T potentialAncestor, T block) {
+    if (getId(potentialAncestor) == getId(block)) return true;
+    for (var child in getChildren(block)) {
+      if (isDescendantOf(potentialAncestor, child)) return true;
+    }
+    return false;
+  }
+
+  @override
+  Future<T> getRootBlock() async {
     return _root;
   }
 
-
   @override
-  Future<Block?> findBlockById(String blockId) async {
-    if (blockId == _root.id) {
+  Future<T?> findBlockById(String blockId) async {
+    if (blockId == getId(_root)) {
       return _root;
     }
-    return _root.findBlockById(blockId);
+    return findById(_root, blockId);
   }
 
   @override
-  Future<String> findParentId(String blockId) async {
-    if (blockId == _root.id) {
-      throw ArgumentError('findParentId called on root block: $blockId');
+  Future<T?> findParent(T block) async {
+    final blockId = getId(block);
+    if (blockId == getId(_root)) {
+      return null; // Root has no parent
     }
     final parentId = _findParentIdInTree(_root, blockId);
-    if (parentId == null) {
-      throw ArgumentError('Block not found in tree: $blockId');
-    }
-    return parentId;
+    if (parentId == null) return null;
+    return findById(_root, parentId);
   }
 
   @override
-  Future<int> findBlockIndex(String blockId) async {
-    if (blockId == _root.id) {
-      return -1;
+  Future<T?> findNextVisibleBlock(T block) async {
+    if (hasChildren(block) && !getIsCollapsed(block)) {
+      return getChildren(block).first;
     }
-    final parentId = await findParentId(blockId);
-    final parent = _root.findBlockById(parentId);
-    if (parent == null) {
-      return -1;
+
+    return _findNextSiblingOrAncestor(block);
+  }
+
+  Future<T?> _findNextSiblingOrAncestor(T block) async {
+    final parent = await findParent(block);
+    if (parent == null) return null;
+
+    final siblings = getChildren(parent);
+    final currentIndex = siblings.indexWhere((child) => getId(child) == getId(block));
+
+    if (currentIndex != -1 && currentIndex < siblings.length - 1) {
+      return siblings[currentIndex + 1];
     }
-    return parent.children.indexWhere((child) => child.id == blockId);
+
+    return _findNextSiblingOrAncestor(parent);
   }
 
   @override
-  Future<int> getTotalBlocks() async {
-    return _root.totalBlocks - 1;
+  Future<T?> findPreviousVisibleBlock(T block) async {
+    final parent = await findParent(block);
+    if (parent == null) return null;
+
+    final siblings = getChildren(parent);
+    final currentIndex = siblings.indexWhere((child) => getId(child) == getId(block));
+
+    if (currentIndex > 0) {
+      final previousSibling = siblings[currentIndex - 1];
+      return _findLastVisibleDescendant(previousSibling);
+    }
+
+    // If this is the first child, parent is the previous block (unless it's root)
+    if (getId(parent) == getId(_root)) {
+      return null;
+    }
+
+    return parent;
   }
 
+  Future<T?> _findLastVisibleDescendant(T block) async {
+    if (hasChildren(block) && !getIsCollapsed(block)) {
+      return _findLastVisibleDescendant(getChildren(block).last);
+    }
+
+    return block;
+  }
+
+  // BlockMutationOps implementation
+
   @override
-  Future<void> updateBlock(String blockId, String content) async {
-    if (blockId == _root.id) {
+  Future<void> updateBlock(T block, String content) async {
+    if (getId(block) == getId(_root)) {
       return;
     }
     final updatedChildren = _updateBlockInList(
-      _root.children,
-      blockId,
-      (block) => block.copyWith(content: content, updatedAt: DateTime.now()),
+      getChildren(_root),
+      getId(block),
+      (b) => copyWith(b, content: content),
     );
     _setRootChildren(updatedChildren);
   }
 
   @override
-  Future<void> toggleBlockCollapse(String blockId) async {
-    if (blockId == _root.id) {
+  Future<void> deleteBlock(T block) async {
+    if (getId(block) == getId(_root)) {
+      return;
+    }
+    final updatedChildren = _removeBlockFromList(getChildren(_root), getId(block));
+    _setRootChildren(updatedChildren);
+  }
+
+  @override
+  Future<void> toggleCollapse(T block) async {
+    if (getId(block) == getId(_root)) {
       return;
     }
     final updatedChildren = _updateBlockInList(
-      _root.children,
-      blockId,
-      (block) => block.copyWith(
-        isCollapsed: !block.isCollapsed,
-        updatedAt: DateTime.now(),
+      getChildren(_root),
+      getId(block),
+      (b) => copyWith(
+        b,
+        isCollapsed: !getIsCollapsed(b),
       ),
     );
     _setRootChildren(updatedChildren);
   }
 
   @override
-  Future<void> addChildBlock(String parentId, Block child) async {
-    if (parentId == _root.id) {
-      _setRootChildren([..._root.children, child]);
+  Future<void> addChildBlock(T parent, T child) async {
+    if (getId(parent) == getId(_root)) {
+      _setRootChildren([...getChildren(_root), child]);
     } else {
       final updatedChildren = _updateBlockInList(
-        _root.children,
-        parentId,
-        (parent) => parent.copyWith(
-          children: [...parent.children, child],
-          updatedAt: DateTime.now(),
+        getChildren(_root),
+        getId(parent),
+        (p) => copyWith(
+          p,
+          children: [...getChildren(p), child],
         ),
       );
       _setRootChildren(updatedChildren);
@@ -141,223 +217,132 @@ class InMemoryOutlinerRepository implements OutlinerRepository {
   }
 
   @override
-  Future<void> removeBlock(String blockId) async {
-    if (blockId == _root.id) {
-      return;
-    }
-    final updatedChildren = _removeBlockFromList(_root.children, blockId);
-    _setRootChildren(updatedChildren);
+  Future<void> addTopLevelBlock(T block) async {
+    _setRootChildren([...getChildren(_root), block]);
   }
 
   @override
-  Future<void> moveBlock(
-    String blockId,
-    String newParentId,
-    int newIndex,
-  ) async {
-    assert(blockId != _root.id, 'Cannot move root block');
+  Future<void> moveBlock(T block, T? newParent, int newIndex) async {
+    final blockId = getId(block);
+    final newParentId = newParent != null ? getId(newParent) : getId(_root);
+
+    assert(blockId != getId(_root), 'Cannot move root block');
     assert(blockId != newParentId, 'Cannot make block a child of itself');
 
-    final block = await findBlockById(blockId);
-    assert(block != null, 'Block not found: $blockId');
+    if (newParent != null) {
+      assert(
+        !isDescendantOf(newParent, block),
+        'Cannot move block into its descendant',
+      );
+    }
 
-    assert(
-      !isDescendantOf(newParentId, blockId),
-      'Cannot move block into its descendant',
-    );
+    var detached = _removeBlockFromList(getChildren(_root), blockId);
 
-    var detached = _removeBlockFromList(_root.children, blockId);
-
-    if (newParentId == _root.id) {
+    if (newParentId == getId(_root)) {
       final insertIndex = newIndex.clamp(0, detached.length);
-      detached.insert(insertIndex, block!);
+      detached.insert(insertIndex, block);
       _setRootChildren(detached);
       return;
     }
 
     detached = _updateBlockInList(detached, newParentId, (parent) {
-      final children = [...parent.children];
+      final children = [...getChildren(parent)];
       final insertIndex = newIndex.clamp(0, children.length);
-      children.insert(insertIndex, block!);
-      return parent.copyWith(children: children, updatedAt: DateTime.now());
+      children.insert(insertIndex, block);
+      return copyWith(parent, children: children);
     });
 
     _setRootChildren(detached);
   }
 
   @override
-  Future<void> indentBlock(String blockId) async {
-    final parentId = await findParentId(blockId);
-    final parent = await findBlockById(parentId);
+  Future<void> indentBlock(T block) async {
+    final parent = await findParent(block);
     if (parent == null) return;
 
-    final siblings = parent.children;
-    final currentIndex = siblings.indexWhere((child) => child.id == blockId);
+    final siblings = getChildren(parent);
+    final currentIndex = siblings.indexWhere((child) => getId(child) == getId(block));
     if (currentIndex <= 0) return;
 
-    final newParentId = siblings[currentIndex - 1].id;
-    final newParent = await findBlockById(newParentId);
-    final newIndex = newParent?.children.length ?? 0;
+    final newParent = siblings[currentIndex - 1];
+    final newIndex = getChildren(newParent).length;
 
-    await moveBlock(blockId, newParentId, newIndex);
+    await moveBlock(block, newParent, newIndex);
   }
 
   @override
-  Future<void> outdentBlock(String blockId) async {
-    final parentId = await findParentId(blockId);
-    if (parentId == _root.id) return;
+  Future<void> outdentBlock(T block) async {
+    final parent = await findParent(block);
+    if (parent == null || getId(parent) == getId(_root)) return;
 
-    final grandParentId = await findParentId(parentId);
-    final grandParent = await findBlockById(grandParentId);
+    final grandParent = await findParent(parent);
     if (grandParent == null) return;
 
-    final siblings = grandParent.children;
-    final parentIndex = siblings.indexWhere((child) => child.id == parentId);
+    final siblings = getChildren(grandParent);
+    final parentIndex = siblings.indexWhere((child) => getId(child) == getId(parent));
     if (parentIndex == -1) return;
 
-    await moveBlock(blockId, grandParentId, parentIndex + 1);
+    await moveBlock(block, grandParent, parentIndex + 1);
   }
 
   @override
-  Future<String> splitBlock(String blockId, int cursorPosition) async {
-    final block = await findBlockById(blockId);
-    if (block == null || blockId == _root.id) {
-      return blockId;
+  Future<String> splitBlock(T block, int cursorPosition) async {
+    if (getId(block) == getId(_root)) {
+      return getId(block);
     }
 
-    final parentId = await findParentId(blockId);
-    final parent = parentId == _root.id ? _root : await findBlockById(parentId);
-    if (parent == null) return blockId;
+    final parent = await findParent(block);
+    if (parent == null) return getId(block);
 
-    final content = block.content;
+    final content = getContent(block);
     final safePosition = cursorPosition.clamp(0, content.length);
     final beforeCursor = content.substring(0, safePosition);
     final afterCursor = content.substring(safePosition);
 
-    final newBlock = Block.create(
+    final newBlock = create(
       id: _idGenerator?.call(),
       content: afterCursor,
     );
 
-    // Find the index of the block to split within its parent
-    final blockIndex = parent.children.indexWhere((child) => child.id == blockId);
-    if (blockIndex == -1) return blockId;
+    final blockIndex = getChildren(parent).indexWhere((child) => getId(child) == getId(block));
+    if (blockIndex == -1) return getId(block);
 
-    if (parentId == _root.id) {
-      final newChildren = List<Block>.from(parent.children);
-      newChildren[blockIndex] = newChildren[blockIndex].copyWith(
+    if (getId(parent) == getId(_root)) {
+      final newChildren = List<T>.from(getChildren(parent));
+      newChildren[blockIndex] = copyWith(
+        newChildren[blockIndex],
         content: beforeCursor,
-        updatedAt: DateTime.now(),
       );
       newChildren.insert(blockIndex + 1, newBlock);
       _setRootChildren(newChildren);
-      return newBlock.id;
+      return getId(newBlock);
     }
 
-    // Update the parent block using _updateBlockInList
     final updatedChildren = _updateBlockInList(
-      _root.children,
-      parentId,
+      getChildren(_root),
+      getId(parent),
       (parentBlock) {
-        final newChildren = List<Block>.from(parentBlock.children);
-        // Update the content of the original block
-        newChildren[blockIndex] = newChildren[blockIndex].copyWith(
+        final newChildren = List<T>.from(getChildren(parentBlock));
+        newChildren[blockIndex] = copyWith(
+          newChildren[blockIndex],
           content: beforeCursor,
-          updatedAt: DateTime.now(),
         );
-        // Insert the new block right after
         newChildren.insert(blockIndex + 1, newBlock);
-        return parentBlock.copyWith(
+        return copyWith(
+          parentBlock,
           children: newChildren,
-          updatedAt: DateTime.now(),
         );
       },
     );
 
     _setRootChildren(updatedChildren);
-    return newBlock.id;
+    return getId(newBlock);
   }
 
-  @override
-  Future<String?> findNextVisibleBlock(String blockId) async {
-    final block = await findBlockById(blockId);
-    if (block == null) return null;
-
-    if (block.hasChildren && !block.isCollapsed) {
-      return block.children.first.id;
-    }
-
-    return _findNextSiblingOrAncestor(blockId);
-  }
-
-  Future<String?> _findNextSiblingOrAncestor(String blockId) async {
-    final parentId = await findParentId(blockId);
-    if (parentId == _root.id) return null;
-
-    final parent = await findBlockById(parentId);
-    if (parent == null) return null;
-
-    final siblings = parent.children;
-    final currentIndex = siblings.indexWhere((child) => child.id == blockId);
-
-    if (currentIndex != -1 && currentIndex < siblings.length - 1) {
-      return siblings[currentIndex + 1].id;
-    }
-
-    return _findNextSiblingOrAncestor(parentId);
-  }
-
-  @override
-  Future<String?> findPreviousVisibleBlock(String blockId) async {
-    final parentId = await findParentId(blockId);
-    final parent = await findBlockById(parentId);
-    if (parent == null) return null;
-
-    final siblings = parent.children;
-    final currentIndex = siblings.indexWhere((child) => child.id == blockId);
-
-    if (currentIndex > 0) {
-      final previousSibling = siblings[currentIndex - 1];
-      return _findLastVisibleDescendant(previousSibling.id);
-    }
-
-    if (parentId == _root.id) {
-      return null;
-    }
-
-    return parentId;
-  }
-
-  Future<String?> _findLastVisibleDescendant(String blockId) async {
-    final block = await findBlockById(blockId);
-    if (block == null) return null;
-
-    if (block.hasChildren && !block.isCollapsed) {
-      return _findLastVisibleDescendant(block.children.last.id);
-    }
-
-    return blockId;
-  }
-
-  bool isDescendantOf(String potentialDescendantId, String ancestorId) {
-    if (ancestorId == potentialDescendantId) return true;
-    final ancestor = _root.findBlockById(ancestorId);
-    if (ancestor == null) return false;
-    return _isDescendantOf(potentialDescendantId, ancestor);
-  }
-
-  bool _isDescendantOf(String potentialDescendantId, Block ancestor) {
-    for (var child in ancestor.children) {
-      if (child.id == potentialDescendantId) return true;
-      if (_isDescendantOf(potentialDescendantId, child)) return true;
-    }
-    return false;
-  }
-
-  String? _findParentIdInTree(Block parent, String blockId) {
-    for (var child in parent.children) {
-      if (child.id == blockId) {
-        return parent.id;
+  String? _findParentIdInTree(T parent, String blockId) {
+    for (var child in getChildren(parent)) {
+      if (getId(child) == blockId) {
+        return getId(parent);
       }
       final found = _findParentIdInTree(child, blockId);
       if (found != null) return found;
@@ -365,34 +350,97 @@ class InMemoryOutlinerRepository implements OutlinerRepository {
     return null;
   }
 
-  List<Block> _removeBlockFromList(List<Block> blocks, String blockId) {
-    final result = <Block>[];
+  List<T> _removeBlockFromList(List<T> blocks, String blockId) {
+    final result = <T>[];
     for (var block in blocks) {
-      if (block.id == blockId) {
+      if (getId(block) == blockId) {
         continue;
       }
       result.add(
-        block.copyWith(children: _removeBlockFromList(block.children, blockId)),
+        copyWith(block, children: _removeBlockFromList(getChildren(block), blockId)),
       );
     }
     return result;
   }
 
-  List<Block> _updateBlockInList(
-    List<Block> blocks,
+  List<T> _updateBlockInList(
+    List<T> blocks,
     String blockId,
-    Block Function(Block) updater,
+    T Function(T) updater,
   ) {
     return blocks.map((block) {
-      if (block.id == blockId) {
+      if (getId(block) == blockId) {
         return updater(block);
       }
-      if (block.hasChildren) {
-        return block.copyWith(
-          children: _updateBlockInList(block.children, blockId, updater),
+      if (hasChildren(block)) {
+        return copyWith(
+          block,
+          children: _updateBlockInList(getChildren(block), blockId, updater),
         );
       }
       return block;
     }).toList();
+  }
+}
+
+/// Concrete implementation of BlockOps for the Freezed Block type.
+/// This is the recommended implementation for most use cases.
+class InMemoryOutlinerRepository extends InMemoryOutlinerRepositoryBase<Block> {
+  InMemoryOutlinerRepository({
+    bool initializeSampleData = true,
+    String Function()? idGenerator,
+  }) : super(
+          initializeSampleData: initializeSampleData,
+          idGenerator: idGenerator,
+        );
+
+  // BlockAccessOps implementation for Freezed Block
+  @override
+  String getId(Block block) => block.id;
+
+  @override
+  String getContent(Block block) => block.content;
+
+  @override
+  List<Block> getChildren(Block block) => block.children;
+
+  @override
+  bool getIsCollapsed(Block block) => block.isCollapsed;
+
+  @override
+  DateTime getCreatedAt(Block block) => block.createdAt;
+
+  @override
+  DateTime getUpdatedAt(Block block) => block.updatedAt;
+
+  // BlockCreationOps implementation for Freezed Block
+  @override
+  Block copyWith(
+    Block block, {
+    String? content,
+    List<Block>? children,
+    bool? isCollapsed,
+  }) {
+    return block.copyWith(
+      content: content ?? block.content,
+      children: children ?? block.children,
+      isCollapsed: isCollapsed ?? block.isCollapsed,
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  @override
+  Block create({
+    String? id,
+    required String content,
+    List<Block>? children,
+    bool? isCollapsed,
+  }) {
+    return Block.create(
+      id: id,
+      content: content,
+      children: children ?? [],
+      isCollapsed: isCollapsed ?? false,
+    );
   }
 }

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../config/block_style.dart';
-import '../models/block.dart';
+import '../core/block_ops.dart';
 import '../models/drag_data.dart';
+import '../models/outliner_state.dart';
 import '../providers/outliner_provider.dart';
 import 'block_widget.dart';
 
@@ -10,16 +11,19 @@ import 'block_widget.dart';
 ///
 /// Provides three drop zones: before, after, and as-child.
 /// All [BlockWidget] customization parameters are passed through.
-class DraggableBlockWidget extends ConsumerStatefulWidget {
-  final Block block;
+/// Generic type [T] allows using any block type.
+class DraggableBlockWidget<T> extends ConsumerStatefulWidget {
+  final T block;
+  final BlockOps<T> ops;
+  final StateNotifierProvider<OutlinerNotifier<T>, OutlinerState<T>>? notifierProvider;
   final int depth;
   final bool keyboardShortcutsEnabled;
   final BlockStyle style;
   final bool isLastSibling;
-  final Widget Function(BuildContext context, Block block)? blockBuilder;
+  final Widget Function(BuildContext context, T block)? blockBuilder;
   final Widget Function(
     BuildContext context,
-    Block block,
+    T block,
     TextEditingController controller,
     FocusNode focusNode,
     VoidCallback onSubmitted,
@@ -27,7 +31,7 @@ class DraggableBlockWidget extends ConsumerStatefulWidget {
   editingBlockBuilder;
   final Widget Function(
     BuildContext context,
-    Block block,
+    T block,
     bool hasChildren,
     bool isCollapsed,
     VoidCallback? onToggle,
@@ -38,7 +42,7 @@ class DraggableBlockWidget extends ConsumerStatefulWidget {
 
   /// Custom builder for drag feedback widget.
   /// If null, a lightweight, platform-agnostic feedback widget is used.
-  final Widget Function(BuildContext context, Block block)? dragFeedbackBuilder;
+  final Widget Function(BuildContext context, T block)? dragFeedbackBuilder;
 
   /// Custom builder for drop zone indicators.
   /// Parameters: context, isHighlighted, indent.
@@ -53,6 +57,8 @@ class DraggableBlockWidget extends ConsumerStatefulWidget {
   const DraggableBlockWidget({
     super.key,
     required this.block,
+    required this.ops,
+    this.notifierProvider,
     this.depth = 0,
     this.keyboardShortcutsEnabled = true,
     this.style = const BlockStyle(),
@@ -66,15 +72,15 @@ class DraggableBlockWidget extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<DraggableBlockWidget> createState() =>
-      _DraggableBlockWidgetState();
+  ConsumerState<DraggableBlockWidget<T>> createState() =>
+      _DraggableBlockWidgetState<T>();
 }
 
 const double _kChildDropZoneWidth = 96.0;
 const Color _kDefaultDropZoneHighlight = Color.fromARGB(120, 27, 115, 232);
 const double _kDropZoneHitHeight = 16.0;
 
-class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
+class _DraggableBlockWidgetState<T> extends ConsumerState<DraggableBlockWidget<T>> {
   bool _isDraggingOverBefore = false;
   bool _isDraggingOverAfter = false;
   bool _isDraggingOverChild = false;
@@ -82,7 +88,9 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
   @override
   Widget build(BuildContext context) {
     final indent = widget.depth * widget.style.indentWidth;
-    final hasChildren = widget.block.hasChildren;
+    final children = widget.ops.getChildren(widget.block);
+    final hasChildren = children.isNotEmpty;
+    final isCollapsed = widget.ops.getIsCollapsed(widget.block);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,16 +100,18 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
           padding: EdgeInsets.only(left: indent),
           child: _buildRow(context, showAsChildZone: !hasChildren),
         ),
-        if (!widget.block.isCollapsed)
-          ...widget.block.children.asMap().entries.map(
+        if (!isCollapsed)
+          ...children.asMap().entries.map(
             (entry) {
               final index = entry.key;
               final child = entry.value;
-              final isLastChild = index == widget.block.children.length - 1;
+              final isLastChild = index == children.length - 1;
 
-              return DraggableBlockWidget(
-                key: ValueKey(child.id),
+              return DraggableBlockWidget<T>(
+                key: ValueKey(widget.ops.getId(child)),
                 block: child,
+                ops: widget.ops,
+                notifierProvider: widget.notifierProvider,
                 depth: widget.depth + 1,
                 keyboardShortcutsEnabled: widget.keyboardShortcutsEnabled,
                 style: widget.style,
@@ -141,13 +151,12 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
   }
 
   Widget _buildDraggableBlock(BuildContext context) {
-    final dragData = DragData(
+    final dragData = DragData<T>(
       block: widget.block,
-      sourceParentId: '',
-      sourceIndex: 0,
+      blockId: widget.ops.getId(widget.block),
     );
 
-    return LongPressDraggable<DragData>(
+    return LongPressDraggable<DragData<T>>(
       data: dragData,
       feedback: _buildDragFeedback(context),
       childWhenDragging: Opacity(opacity: 0.3, child: _buildBlockWidget()),
@@ -156,9 +165,11 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
   }
 
   Widget _buildBlockWidget() {
-    return BlockWidget(
-      key: ValueKey(widget.block.id),
+    return BlockWidget<T>(
+      key: ValueKey(widget.ops.getId(widget.block)),
       block: widget.block,
+      ops: widget.ops,
+      notifierProvider: widget.notifierProvider,
       depth: widget.depth,
       keyboardShortcutsEnabled: widget.keyboardShortcutsEnabled,
       style: widget.style,
@@ -172,13 +183,12 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
   }
 
   Widget _buildBulletDragWrapper(BuildContext context, Widget child) {
-    final dragData = DragData(
+    final dragData = DragData<T>(
       block: widget.block,
-      sourceParentId: '',
-      sourceIndex: 0,
+      blockId: widget.ops.getId(widget.block),
     );
 
-    return Draggable<DragData>(
+    return Draggable<DragData<T>>(
       data: dragData,
       feedback: _buildDragFeedback(context),
       childWhenDragging: Opacity(opacity: 0.3, child: child),
@@ -191,7 +201,7 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
       return widget.dragFeedbackBuilder!(context, widget.block);
     }
 
-    final children = widget.block.children.take(5).toList();
+    final children = widget.ops.getChildren(widget.block).take(5).toList();
 
     return Material(
       color: Colors.transparent,
@@ -216,8 +226,10 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
             children: [
               Opacity(
                 opacity: 0.7,
-                child: BlockWidget(
+                child: BlockWidget<T>(
                   block: widget.block,
+                  ops: widget.ops,
+                  notifierProvider: widget.notifierProvider,
                   depth: widget.depth,
                   keyboardShortcutsEnabled: false,
                   style: widget.style,
@@ -239,8 +251,10 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
                   alignment: Alignment.topLeft,
                   child: Opacity(
                     opacity: opacity,
-                    child: BlockWidget(
+                    child: BlockWidget<T>(
                       block: child,
+                      ops: widget.ops,
+                      notifierProvider: widget.notifierProvider,
                       depth: widget.depth + 1,
                       keyboardShortcutsEnabled: false,
                       style: widget.style,
@@ -267,11 +281,10 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
         ? _isDraggingOverBefore
         : _isDraggingOverAfter;
 
-    return DragTarget<DragData>(
+    return DragTarget<DragData<T>>(
       onWillAcceptWithDetails: (details) {
-        // For before/after, just check if source and target are different
-        // The repository layer will handle complex validation
-        return details.data.block.id != widget.block.id;
+        // Check if source and target are different
+        return details.data.blockId != widget.ops.getId(widget.block);
       },
       onAcceptWithDetails: (details) {
         _handleDrop(details.data, position);
@@ -282,16 +295,10 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
       },
       onMove: (details) {
         // Only highlight if this would be a valid drop
-        if (details.data.block.id == widget.block.id) return;
+        if (details.data.blockId == widget.ops.getId(widget.block)) return;
 
-        // For before/after, check if the target's parent is a descendant of source
-        // (which would make source become a child of its own descendant)
-        final targetParentId = _findParentIdSync(widget.block.id);
-        if (targetParentId != null) {
-          if (_isDescendantOfById(targetParentId, details.data.block.id)) {
-            return;
-          }
-        }
+        // Check for circular reference: prevent making a block its own ancestor
+        if (widget.ops.isDescendantOf(widget.block, details.data.block)) return;
 
         setState(() {
           if (isBefore) {
@@ -342,10 +349,10 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
   }
 
   Widget _buildDropZoneOnBlock(BuildContext context) {
-    return DragTarget<DragData>(
+    return DragTarget<DragData<T>>(
       onWillAcceptWithDetails: (details) {
-        if (details.data.block.id == widget.block.id) return false;
-        return !_isDescendantOfById(widget.block.id, details.data.block.id);
+        if (details.data.blockId == widget.ops.getId(widget.block)) return false;
+        return !widget.ops.isDescendantOf(widget.block, details.data.block);
       },
       onAcceptWithDetails: (details) {
         _handleDrop(details.data, DropPosition.asChild);
@@ -355,8 +362,8 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
       },
       onMove: (details) {
         // Only highlight if this would be a valid drop
-        if (details.data.block.id == widget.block.id) return;
-        if (_isDescendantOfById(widget.block.id, details.data.block.id)) return;
+        if (details.data.blockId == widget.ops.getId(widget.block)) return;
+        if (widget.ops.isDescendantOf(widget.block, details.data.block)) return;
 
         setState(() {
           _isDraggingOverChild = true;
@@ -387,88 +394,69 @@ class _DraggableBlockWidgetState extends ConsumerState<DraggableBlockWidget> {
     );
   }
 
-  bool _isDescendantOf(Block potential, Block ancestor) {
-    if (potential.id == ancestor.id) return true;
-    for (var child in ancestor.children) {
-      if (_isDescendantOf(potential, child)) return true;
-    }
-    return false;
-  }
+  Future<void> _handleDrop(DragData<T> dragData, DropPosition position) async {
+    final targetBlock = widget.block;
+    final targetId = widget.ops.getId(targetBlock);
+    final children = widget.ops.getChildren(targetBlock);
 
-  /// Finds the parent ID of a block synchronously using the current state.
-  String? _findParentIdSync(String blockId) {
-    final state = ref.read(outlinerProvider);
-    return state.maybeWhen(
-      loaded: (rootBlock, _, __, ___) {
-        return _findParentIdInBlock(rootBlock, blockId);
-      },
-      orElse: () => null,
-    );
-  }
-
-  /// Recursively finds the parent ID of a block in the tree.
-  String? _findParentIdInBlock(Block parent, String blockId) {
-    for (var child in parent.children) {
-      if (child.id == blockId) return parent.id;
-      final found = _findParentIdInBlock(child, blockId);
-      if (found != null) return found;
-    }
-    return null;
-  }
-
-  /// Checks if [potentialDescendantId] is a descendant of [ancestorId] using
-  /// the current state from the provider (not stale Block objects).
-  bool _isDescendantOfById(String potentialDescendantId, String ancestorId) {
-    final state = ref.read(outlinerProvider);
-    return state.maybeWhen(
-      loaded: (rootBlock, _, __, ___) {
-        final ancestor = rootBlock.findBlockById(ancestorId);
-        if (ancestor == null) return false;
-
-        // Check if the potentialDescendant is found in the ancestor's subtree
-        return ancestor.findBlockById(potentialDescendantId) != null;
-      },
-      orElse: () => false,
-    );
-  }
-
-  Future<void> _handleDrop(DragData dragData, DropPosition position) async {
-    final notifier = ref.read(outlinerProvider.notifier);
-    final state = ref.read(outlinerProvider);
-
-    final rootId = state.whenOrNull(
-      loaded: (rootBlock, _, __, ___) => rootBlock.id,
-    );
-
-    if (rootId == null) return;
-
-    final currentParentId = await notifier.findParentId(widget.block.id);
-    final currentIndex = await notifier.findBlockIndex(widget.block.id);
-
-    String newParentId;
+    T? newParent;
     int newIndex;
 
     switch (position) {
       case DropPosition.before:
-        newParentId = currentParentId;
-        newIndex = currentIndex;
+        final parentAndIndex = _findParentAndIndex(targetId);
+        if (parentAndIndex == null) return;
+        newParent = parentAndIndex.$1;
+        newIndex = parentAndIndex.$2;
         break;
       case DropPosition.after:
-        newParentId = currentParentId;
-        newIndex = currentIndex + 1;
+        final parentAndIndex = _findParentAndIndex(targetId);
+        if (parentAndIndex == null) return;
+        newParent = parentAndIndex.$1;
+        newIndex = parentAndIndex.$2 + 1;
         break;
       case DropPosition.asChild:
-        newParentId = widget.block.id;
-        newIndex = widget.block.children.length;
+        newParent = targetBlock;
+        newIndex = children.length;
         break;
     }
 
-    debugPrint(
-      '[Drop] source=${dragData.block.id} target=${widget.block.id} '
-      'position=$position newParent=$newParentId newIndex=$newIndex',
-    );
+    final provider = widget.notifierProvider ?? outlinerProvider;
+    final notifier = ref.read(provider.notifier);
+    await notifier.moveBlock(dragData.block, newParent, newIndex);
+  }
 
-    await notifier.moveBlock(dragData.block.id, newParentId, newIndex);
+  /// Find the parent block and index of a block with the given ID
+  /// Returns (parent, index) or null if not found
+  (T?, int)? _findParentAndIndex(String blockId) {
+    // Search from top-level blocks
+    final topLevel = widget.ops.getTopLevelBlocks();
+    for (int i = 0; i < topLevel.length; i++) {
+      if (widget.ops.getId(topLevel[i]) == blockId) {
+        return (null, i); // Parent is root (null), index is i
+      }
+    }
+
+    // Search recursively in the tree
+    for (var topBlock in topLevel) {
+      final result = _findParentAndIndexInSubtree(topBlock, blockId);
+      if (result != null) return result;
+    }
+
+    return null;
+  }
+
+  /// Recursively search for a block in a subtree
+  (T, int)? _findParentAndIndexInSubtree(T parent, String blockId) {
+    final children = widget.ops.getChildren(parent);
+    for (int i = 0; i < children.length; i++) {
+      if (widget.ops.getId(children[i]) == blockId) {
+        return (parent, i);
+      }
+      final result = _findParentAndIndexInSubtree(children[i], blockId);
+      if (result != null) return result;
+    }
+    return null;
   }
 
   Color _resolveDropZoneColor() {

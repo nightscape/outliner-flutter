@@ -12,6 +12,7 @@ A platform-agnostic Flutter library for hierarchical block-based editing, inspir
 - **Customizable Rendering**: Builder callbacks for complete UI control
 - **Immutable State**: Clean Riverpod + Freezed architecture
 - **Repository Pattern**: Flexible persistence layer
+- **Generic Block Support**: Type class abstraction for custom block types (FRB, built_value, etc.)
 
 ## Installation
 
@@ -188,10 +189,106 @@ class FirestoreOutlinerRepository implements OutlinerRepository {
 }
 
 // Use in your app
-final outlinerProvider = StateNotifierProvider<OutlinerNotifier, OutlinerState>(
+final outlinerProvider = StateNotifierProvider<OutlinerNotifier<Block>, OutlinerState<Block>>(
   (ref) => OutlinerNotifier(FirestoreOutlinerRepository()),
 );
 ```
+
+### Custom Block Types (Advanced)
+
+The library supports **custom block implementations** through a type class abstraction. This is particularly useful when working with code generation tools like Flutter Rust Bridge (FRB).
+
+#### Using with FRB-Generated Blocks
+
+1. **Create a BlockOps implementation** for your FRB type:
+
+```dart
+import 'package:outliner_view/outliner_view.dart';
+import 'package:your_app/frb_generated.dart';
+
+class FrbBlockOps implements BlockOps<FrbBlock> {
+  const FrbBlockOps();
+
+  @override
+  String getId(FrbBlock block) => block.id;
+
+  @override
+  String getContent(FrbBlock block) => block.content;
+
+  @override
+  List<FrbBlock> getChildren(FrbBlock block) => block.children;
+
+  @override
+  bool getIsCollapsed(FrbBlock block) => block.isCollapsed;
+
+  @override
+  DateTime getCreatedAt(FrbBlock block) => block.createdAt;
+
+  @override
+  DateTime getUpdatedAt(FrbBlock block) => block.updatedAt;
+
+  @override
+  FrbBlock copyWith(
+    FrbBlock block, {
+    String? content,
+    List<FrbBlock>? children,
+    bool? isCollapsed,
+  }) {
+    return FrbBlock(
+      id: block.id,
+      content: content ?? block.content,
+      children: children ?? block.children,
+      isCollapsed: isCollapsed ?? block.isCollapsed,
+      createdAt: block.createdAt,
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  @override
+  FrbBlock create({
+    String? id,
+    required String content,
+    List<FrbBlock>? children,
+    bool? isCollapsed,
+  }) {
+    return FrbBlock(
+      id: id ?? Uuid().v4(),
+      content: content,
+      children: children ?? [],
+      isCollapsed: isCollapsed ?? false,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+  }
+}
+```
+
+2. **Create a repository** with your custom type:
+
+```dart
+final frbRepository = InMemoryOutlinerRepositoryBase<FrbBlock>(
+  ops: const FrbBlockOps(),
+);
+```
+
+3. **Update your providers**:
+
+```dart
+final frbOutlinerProvider =
+  StateNotifierProvider<OutlinerNotifier<FrbBlock>, OutlinerState<FrbBlock>>(
+    (ref) {
+      return OutlinerNotifier(frbRepository);
+    },
+  );
+```
+
+**Benefits**:
+- ✅ No conversion boilerplate between your types and the outliner
+- ✅ Works with code-generated types (FRB, built_value, etc.)
+- ✅ Type-safe operations
+- ✅ Full control over block implementation
+
+**See `lib/core/README.md` for complete documentation.**
 
 ## API Reference
 
@@ -216,9 +313,15 @@ final outlinerProvider = StateNotifierProvider<OutlinerNotifier, OutlinerState>(
 ### Models
 
 - **`Block`**: Immutable block model (Freezed)
-- **`OutlinerState`**: State union (loading | loaded | error)
+- **`OutlinerState<T>`**: State union (loading | loaded | error)
 - **`BlockStyle`**: Visual styling configuration
 - **`OutlinerConfig`**: Global configuration
+
+### Core Abstractions (Advanced)
+
+- **`BlockOps<T>`**: Type class interface for block operations
+- **`FreezedBlockOps`**: BlockOps implementation for Freezed Block type
+- **`InMemoryOutlinerRepositoryBase<T>`**: Generic repository base class
 
 ## Mobile Support
 

@@ -74,11 +74,13 @@ export 'models/block.dart';
 export 'models/outliner_state.dart';
 export 'models/drag_data.dart';
 
+// Core Abstractions (for custom block types)
+export 'core/block_ops.dart';
+
 // State Management
 export 'providers/outliner_provider.dart';
 
-// Repository Pattern
-export 'repositories/outliner_repository.dart';
+// BlockOps Implementation
 export 'repositories/in_memory_outliner_repository.dart';
 
 // Configuration

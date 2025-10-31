@@ -1,76 +1,76 @@
 enum DragTargetType { before, after, asChild }
 
-sealed class Operation {
+sealed class Operation<T> {
   const Operation();
 }
 
-class DragOperation extends Operation {
-  final String sourceBlockId;
-  final String targetBlockId;
+class DragOperation<T> extends Operation<T> {
+  final T sourceBlock;
+  final T targetBlock;
   final DragTargetType targetType;
 
   const DragOperation({
-    required this.sourceBlockId,
-    required this.targetBlockId,
+    required this.sourceBlock,
+    required this.targetBlock,
     required this.targetType,
   });
 
   @override
   String toString() =>
-      'Drag($sourceBlockId -> $targetBlockId as ${targetType.name})';
+      'Drag($sourceBlock -> $targetBlock as ${targetType.name})';
 }
 
-class IndentOperation extends Operation {
-  final String blockId;
+class IndentOperation<T> extends Operation<T> {
+  final T block;
 
-  const IndentOperation(this.blockId);
+  const IndentOperation(this.block);
 
   @override
-  String toString() => 'Indent($blockId)';
+  String toString() => 'Indent($block)';
 }
 
-class OutdentOperation extends Operation {
-  final String blockId;
+class OutdentOperation<T> extends Operation<T> {
+  final T block;
 
-  const OutdentOperation(this.blockId);
+  const OutdentOperation(this.block);
 
   @override
-  String toString() => 'Outdent($blockId)';
+  String toString() => 'Outdent($block)';
 }
 
-class EnterOperation extends Operation {
-  final String blockId;
+class EnterOperation<T> extends Operation<T> {
+  final T block;
   final int cursorPosition;
 
-  const EnterOperation(this.blockId, this.cursorPosition);
+  const EnterOperation(this.block, this.cursorPosition);
 
   @override
-  String toString() => 'Enter($blockId at $cursorPosition)';
+  String toString() => 'Enter($block at $cursorPosition)';
 }
 
-class ToggleCollapseOperation extends Operation {
-  final String blockId;
+class ToggleCollapseOperation<T> extends Operation<T> {
+  final T block;
 
-  const ToggleCollapseOperation(this.blockId);
+  const ToggleCollapseOperation(this.block);
 
   @override
-  String toString() => 'ToggleCollapse($blockId)';
+  String toString() => 'ToggleCollapse($block)';
 }
 
-class ArrowUpOperation extends Operation {
-  final String blockId;
+class ArrowUpOperation<T> extends Operation<T> {
+  final T block;
 
-  const ArrowUpOperation(this.blockId);
+  const ArrowUpOperation(this.block);
 
   @override
-  String toString() => 'ArrowUp($blockId)';
+  String toString() => 'ArrowUp($block)';
 }
 
-class ArrowDownOperation extends Operation {
-  final String blockId;
+class ArrowDownOperation<T> extends Operation<T> {
+  final T block;
 
-  const ArrowDownOperation(this.blockId);
+  const ArrowDownOperation(this.block);
 
   @override
-  String toString() => 'ArrowDown($blockId)';
+  String toString() => 'ArrowDown($block)';
 }

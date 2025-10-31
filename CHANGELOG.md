@@ -8,17 +8,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Generic Block Architecture** - Type class abstraction for custom block implementations
+  - `BlockOps<T>` interface defines operations on any block type
+  - `FreezedBlockOps` implementation for the default Freezed `Block` type
+  - `InMemoryOutlinerRepositoryBase<T>` generic repository
+  - Full support for Flutter Rust Bridge (FRB) generated types
+  - Extension methods for derived operations (findById, hasChildren, totalBlocks)
+  - See `lib/core/README.md` for usage guide
 - `editingBlockBuilder` callback for custom editing widgets
   - Allows full customization of the editing experience
   - Provides access to `TextEditingController`, `FocusNode`, and `onSubmitted` callback
   - Works seamlessly with sensible defaults when not provided
 
+### Changed
+- **BREAKING**: Generic type parameters added to core types:
+  - `OutlinerRepository<T>`, `OutlinerState<T>`, `OutlinerNotifier<T>`
+  - Default providers use `Block` type (backwards compatible for simple usage)
+  - `InMemoryOutlinerRepository` now extends `InMemoryOutlinerRepositoryBase<Block>`
+- Repository interface now includes `BlockOps<T> get ops` property
+
 ### Documentation
+- Added `lib/core/README.md` with comprehensive guide for custom block types
 - Clarified dependency requirements in README and CLAUDE.md
   - Explained that both `flutter_hooks` and `hooks_riverpod` are required
   - `flutter_hooks` provides hook functions (useState, useEffect, etc.)
   - `hooks_riverpod` provides HookConsumerWidget for combining hooks with Riverpod
   - Both packages are needed in version 2.6.1 as hooks_riverpod doesn't re-export hooks
+
+### Migration Guide
+For existing users: **No changes required** unless using custom repositories.
+- Default usage with `InMemoryOutlinerRepository()` works unchanged
+- Generic types are inferred automatically in most cases
+- If you implemented custom repositories, add `BlockOps<Block> get ops => const FreezedBlockOps();`
 
 ## [0.1.0] - 2025-10-20
 

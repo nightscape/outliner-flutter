@@ -1,51 +1,74 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:outliner_view/core/block_ops.dart';
 import 'package:outliner_view/models/block.dart';
 import 'package:outliner_view/models/outliner_state.dart';
 import 'package:outliner_view/providers/outliner_provider.dart';
+import 'package:outliner_view/repositories/in_memory_outliner_repository.dart';
+import 'package:riverpod/riverpod.dart';
 import 'outliner_view_property_test.dart';
 
-List<Block> getBlocks(OutlinerState state) {
-  return state.maybeWhen(
-    loaded: (rootBlock, focusedBlockId, cursorPosition, viewRootId) =>
-        rootBlock.children,
-    orElse: () => [],
-  );
+List<T> getBlocks<T>(OutlinerState<T> state, BlockOps<T> ops) {
+  return ops.getChildren(state.rootBlock);
 }
 
-Block? getRootBlock(OutlinerState state) {
-  return state.whenOrNull(
-    loaded: (rootBlock, focusedBlockId, cursorPosition, viewRootId) =>
-        rootBlock,
-  );
+T getRootBlock<T>(OutlinerState<T> state) {
+  return state.rootBlock;
 }
 
-abstract class TestContext {
-  OutlinerNotifier get notifier;
-  List<Block> get blocks => getBlocks(notifier.state);
-  Block? get rootBlock => getRootBlock(notifier.state);
+abstract class TestContext<T> {
+  /// The system under test (SUT) notifier
+  OutlinerNotifier<T> get notifier;
+
+  /// The reference repository (trusted implementation)
+  BlockOps<T> get referenceRepo;
+
+  /// BlockOps from the SUT
+  BlockOps<T> get ops => notifier.ops;
+
+  /// Blocks from the SUT
+  List<T> get blocks => getBlocks(notifier.state, ops);
+
+  /// Root block from the SUT
+  T get rootBlock => getRootBlock(notifier.state);
+
+  /// Blocks from the reference repository
+  Future<List<T>> get referenceBlocks async {
+    final root = await referenceRepo.getRootBlock();
+    return referenceRepo.getChildren(root);
+  }
+
+  /// Root block from the reference repository
+  Future<T> get referenceRootBlock => referenceRepo.getRootBlock();
 }
 
-class NotifierContext extends TestContext {
+class NotifierContext<T> extends TestContext<T> {
   @override
-  final OutlinerNotifier notifier;
+  final OutlinerNotifier<T> notifier;
 
-  NotifierContext(this.notifier);
+  @override
+  final BlockOps<T> referenceRepo;
+
+  NotifierContext(this.notifier, this.referenceRepo);
 }
 
-class UIContext extends TestContext {
+class UIContext<T> extends TestContext<T> {
   final WidgetTester tester;
   final ProviderContainer container;
   final IdGenerator idGenerator;
-
-  UIContext(this.tester, this.container, this.idGenerator);
-
-  @override
-  OutlinerNotifier get notifier => container.read(outlinerProvider.notifier);
+  final StateNotifierProvider<OutlinerNotifier<T>, OutlinerState<T>> provider;
 
   @override
-  List<Block> get blocks => getBlocks(container.read(outlinerProvider));
+  final BlockOps<T> referenceRepo;
+
+  UIContext(this.tester, this.container, this.idGenerator, this.referenceRepo, this.provider);
 
   @override
-  Block? get rootBlock => getRootBlock(container.read(outlinerProvider));
+  OutlinerNotifier<T> get notifier => container.read(provider.notifier);
+
+  @override
+  List<T> get blocks => getBlocks(container.read(provider), ops);
+
+  @override
+  T get rootBlock => getRootBlock(container.read(provider));
 }

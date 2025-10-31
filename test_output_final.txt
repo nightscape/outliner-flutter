@@ -1,0 +1,851 @@
+00:00 +0: loading /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart                                                                                                       00:00 +0: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                         00:00 +1: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                         00:00 +2: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                         00:00 +3: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                         00:00 +4: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                         00:00 +5: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                         00:00 +6: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                         00:00 +7: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                         00:00 +8: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                         00:00 +9: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                         00:00 +10: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                        00:00 +11: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                        00:00 +12: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                        00:01 +12: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                        00:01 +12: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants                        
+DEBUG: Block block-45130202 has mismatched parents:
+  SUT parent ID: block-451302
+  Ref parent ID: test-block-0
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+00:01 +12 -1: /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart: Notifier Property Tests (Fast - No UI) all operations preserve structural invariants [E]                 
+  Expected: 'test-block-0'
+    Actual: 'block-451302'
+     Which: is different.
+            Expected: test-block ...
+              Actual: block-4513 ...
+                      ^
+             Differ at offset 0
+  Run 2 - Initial: Parent relationship for block-45130202 should match
+  
+  Reference Tree:
+  - block-451302 
+    - block-45130201 
+    - block-45130202 
+  - block-282051 
+  - block-643222 
+  - block-143046 
+    - block-14304601 
+  
+  SUT Tree:
+  - block-451302 
+    - block-45130201 
+    - block-45130202 
+  - block-282051 
+  - block-643222 
+  - block-143046 
+    - block-14304601 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 148:22                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+DEBUG: Block block-96323902 has mismatched parents:
+  SUT parent ID: block-963239
+  Ref parent ID: test-block-0
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'test-block-0'
+    Actual: 'block-963239'
+     Which: is different.
+            Expected: test-block ...
+              Actual: block-9632 ...
+                      ^
+             Differ at offset 0
+  Run 3 - After action 1 (Outdent(Block(id: block-96323901, content: Block 96323901, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:38.777673, updatedAt: 2025-11-01 09:50:38.777673))): Parent relationship for block-96323902 should match
+  
+  Reference Tree:
+  - block-144413 
+    - block-14441301 
+  - block-428037 
+    - block-42803701 
+  - block-963239 
+    - block-96323902 
+  - block-96323901 
+  
+  SUT Tree:
+  - block-144413 
+    - block-14441301 
+  - block-428037 
+    - block-42803701 
+  - block-963239 
+    - block-96323902 
+  - block-96323901 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 166:26                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+DEBUG: Block block-189067 has mismatched parents:
+  SUT parent ID: test-block-0
+  Ref parent ID: block-410292
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'block-410292'
+    Actual: 'test-block-0'
+     Which: is different.
+            Expected: block-4102 ...
+              Actual: test-block ...
+                      ^
+             Differ at offset 0
+  Run 5 - After action 1 (Drag(Block(id: block-41029201, content: Block 41029201, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:38.875038, updatedAt: 2025-11-01 09:50:38.875038) -> Block(id: block-189067, content: Block 189067, children: [Block(id: block-18906701, content: Block 18906701, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:38.875042, updatedAt: 2025-11-01 09:50:38.875042)], isCollapsed: false, createdAt: 2025-11-01 09:50:38.875043, updatedAt: 2025-11-01 09:50:38.875043) as before)): Parent relationship for block-189067 should match
+  
+  Reference Tree:
+  - block-410292 
+  - block-41029201 
+  - block-189067 
+    - block-18906701 
+  
+  SUT Tree:
+  - block-410292 
+  - block-41029201 
+  - block-189067 
+    - block-18906701 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 166:26                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+Property Test: Run 10/50
+DEBUG: Block block-86134601 has mismatched parents:
+  SUT parent ID: block-288112
+  Ref parent ID: block-28811201
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'block-28811201'
+    Actual: 'block-288112'
+     Which: is different. Both strings start the same, but the actual value is missing the following trailing characters: 01
+  Run 10 - After action 3 (Indent(Block(id: block-28811202, content: Block 28811202, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:39.112515, updatedAt: 2025-11-01 09:50:39.175530))): Parent relationship for block-86134601 should match
+  
+  Reference Tree:
+  - block-157715 
+  - block-861346 
+  - block-288112 
+    - block-28811201 
+      - block-86134601 
+        - block-28811202 
+  - block-414542 
+    - block-41454201 
+  
+  SUT Tree:
+  - block-157715 
+  - block-861346 
+  - block-288112 
+    - block-28811201 
+      - block-86134601 
+        - block-28811202 
+  - block-414542 
+    - block-41454201 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 166:26                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+DEBUG: Block block-93939501 has mismatched parents:
+  SUT parent ID: block-939395
+  Ref parent ID: test-block-0
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'test-block-0'
+    Actual: 'block-939395'
+     Which: is different.
+            Expected: test-block ...
+              Actual: block-9393 ...
+                      ^
+             Differ at offset 0
+  Run 12 - Initial: Parent relationship for block-93939501 should match
+  
+  Reference Tree:
+  - block-939395 
+    - block-93939501 
+  - block-527435 
+  
+  SUT Tree:
+  - block-939395 
+    - block-93939501 
+  - block-527435 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 148:22                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+Property Test: Run 20/50
+DEBUG: Block block-77626101 has mismatched parents:
+  SUT parent ID: block-776261
+  Ref parent ID: test-block-0
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'test-block-0'
+    Actual: 'block-776261'
+     Which: is different.
+            Expected: test-block ...
+              Actual: block-7762 ...
+                      ^
+             Differ at offset 0
+  Run 22 - Initial: Parent relationship for block-77626101 should match
+  
+  Reference Tree:
+  - block-729806 
+  - block-113620 
+    - block-11362001 
+  - block-776261 
+    - block-77626101 
+    - block-77626102 
+  
+  SUT Tree:
+  - block-729806 
+  - block-113620 
+    - block-11362001 
+  - block-776261 
+    - block-77626101 
+    - block-77626102 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 148:22                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+DEBUG: Block block-40007201 has mismatched parents:
+  SUT parent ID: block-400072
+  Ref parent ID: test-block-0
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'test-block-0'
+    Actual: 'block-400072'
+     Which: is different.
+            Expected: test-block ...
+              Actual: block-4000 ...
+                      ^
+             Differ at offset 0
+  Run 23 - Initial: Parent relationship for block-40007201 should match
+  
+  Reference Tree:
+  - block-238575 
+    - block-23857501 
+    - block-23857502 
+  - block-400072 
+    - block-40007201 
+    - block-40007202 
+  
+  SUT Tree:
+  - block-238575 
+    - block-23857501 
+    - block-23857502 
+  - block-400072 
+    - block-40007201 
+    - block-40007202 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 148:22                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+DEBUG: Block block-40007202 has mismatched parents:
+  SUT parent ID: block-40007201
+  Ref parent ID: test-block-0
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'test-block-0'
+    Actual: 'block-40007201'
+     Which: is different.
+            Expected: test-block ...
+              Actual: block-4000 ...
+                      ^
+             Differ at offset 0
+  Run 23 - After action 1 (Drag(Block(id: block-23857502, content: Block 23857502, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:39.876711, updatedAt: 2025-11-01 09:50:39.876711) -> Block(id: block-400072, content: Block 400072, children: [Block(id: block-40007201, content: Block 40007201, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:39.876712, updatedAt: 2025-11-01 09:50:39.876712), Block(id: block-40007202, content: Block 40007202, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:39.876712, updatedAt: 2025-11-01 09:50:39.876712)], isCollapsed: false, createdAt: 2025-11-01 09:50:39.876713, updatedAt: 2025-11-01 09:50:39.876713) as after)): Parent relationship for block-40007202 should match
+  
+  Reference Tree:
+  - block-238575 
+    - block-23857501 
+  - block-400072 
+    - block-40007201 
+    - block-40007202 
+  - block-23857502 
+  
+  SUT Tree:
+  - block-238575 
+    - block-23857501 
+  - block-400072 
+    - block-40007201 
+    - block-40007202 
+  - block-23857502 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 166:26                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+DEBUG: Block block-96503401 has mismatched parents:
+  SUT parent ID: block-965034
+  Ref parent ID: test-block-0
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'test-block-0'
+    Actual: 'block-965034'
+     Which: is different.
+            Expected: test-block ...
+              Actual: block-9650 ...
+                      ^
+             Differ at offset 0
+  Run 26 - After action 1 (Outdent(Block(id: block-16499902, content: Block 16499902, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:40.008084, updatedAt: 2025-11-01 09:50:40.008084))): Parent relationship for block-96503401 should match
+  
+  Reference Tree:
+  - block-965034 
+    - block-96503401 
+  - block-164999 
+    - block-16499901 
+  - block-16499902 
+  - block-689326 
+    - block-68932601 
+  - block-552344 
+    - block-55234401 
+  - block-814462 
+    - block-81446201 
+    - block-81446202 
+  
+  SUT Tree:
+  - block-965034 
+    - block-96503401 
+  - block-164999 
+    - block-16499901 
+  - block-16499902 
+  - block-689326 
+    - block-68932601 
+  - block-552344 
+    - block-55234401 
+  - block-814462 
+    - block-81446201 
+    - block-81446202 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 166:26                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+DEBUG: Block block-530340 has mismatched parents:
+  SUT parent ID: test-block-0
+  Ref parent ID: block-410860
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'block-410860'
+    Actual: 'test-block-0'
+     Which: is different.
+            Expected: block-4108 ...
+              Actual: test-block ...
+                      ^
+             Differ at offset 0
+  Run 28 - After action 2 (Indent(Block(id: block-44796202, content: Block 44796202, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:40.148248, updatedAt: 2025-11-01 09:50:40.221880))): Parent relationship for block-530340 should match
+  
+  Reference Tree:
+  - block-410860 
+    - block-41086001 
+      - block-41086002 
+  - block-530340 
+    - block-53034001 
+    - block-53034002 
+  - block-574868 
+  - block-946365 
+    - block-94636501 
+  - block-447962 
+    - block-44796201 
+      - block-44796202 
+  
+  SUT Tree:
+  - block-410860 
+    - block-41086001 
+      - block-41086002 
+  - block-530340 
+    - block-53034001 
+    - block-53034002 
+  - block-574868 
+  - block-946365 
+    - block-94636501 
+  - block-447962 
+    - block-44796201 
+      - block-44796202 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 166:26                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+Property Test: Run 30/50
+DEBUG: Block block-3909301 has mismatched parents:
+  SUT parent ID: block-39093
+  Ref parent ID: test-block-0
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'test-block-0'
+    Actual: 'block-39093'
+     Which: is different.
+            Expected: test-block ...
+              Actual: block-3909 ...
+                      ^
+             Differ at offset 0
+  Run 30 - After action 1 (Indent(Block(id: block-3909302, content: Block 3909302, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:40.278555, updatedAt: 2025-11-01 09:50:40.278555))): Parent relationship for block-3909301 should match
+  
+  Reference Tree:
+  - block-25187 
+  - block-39093 
+    - block-3909301 
+      - block-3909302 
+  
+  SUT Tree:
+  - block-25187 
+  - block-39093 
+    - block-3909301 
+      - block-3909302 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 166:26                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+DEBUG: Block block-3909302 has mismatched parents:
+  SUT parent ID: block-3909301
+  Ref parent ID: test-block-0
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'test-block-0'
+    Actual: 'block-3909301'
+     Which: is different.
+            Expected: test-block ...
+              Actual: block-3909 ...
+                      ^
+             Differ at offset 0
+  Run 30 - After action 2 (Indent(Block(id: block-25187, content: Block 25187, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:40.278553, updatedAt: 2025-11-01 09:50:40.315678))): Parent relationship for block-3909302 should match
+  
+  Reference Tree:
+  - block-25187 
+  - block-39093 
+    - block-3909301 
+      - block-3909302 
+  
+  SUT Tree:
+  - block-25187 
+  - block-39093 
+    - block-3909301 
+      - block-3909302 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 166:26                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+DEBUG: Block block-59675001 has mismatched parents:
+  SUT parent ID: block-57847702
+  Ref parent ID: block-578477
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'block-578477'
+    Actual: 'block-57847702'
+     Which: is different. Both strings start the same, but the actual value also has the following trailing characters: 02
+  Run 32 - Initial: Parent relationship for block-59675001 should match
+  
+  Reference Tree:
+  - block-596750 
+    - block-59675001 
+  - block-578477 
+    - block-57847701 
+    - block-57847702 
+  
+  SUT Tree:
+  - block-596750 
+    - block-59675001 
+  - block-578477 
+    - block-57847701 
+    - block-57847702 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 148:22                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+DEBUG: Block block-39945501 has mismatched parents:
+  SUT parent ID: block-399455
+  Ref parent ID: test-block-0
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'test-block-0'
+    Actual: 'block-399455'
+     Which: is different.
+            Expected: test-block ...
+              Actual: block-3994 ...
+                      ^
+             Differ at offset 0
+  Run 34 - After action 3 (Indent(Block(id: block-96632502, content: Block 96632502, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:40.475597, updatedAt: 2025-11-01 09:50:40.549364))): Parent relationship for block-39945501 should match
+  
+  Reference Tree:
+  - block-399455 
+    - block-39945501 
+      - block-39945502 
+  - block-726634 
+  - block-72663401 
+  - block-851270 
+  - block-966325 
+    - block-96632501 
+      - block-96632502 
+  - block-152386 
+    - block-15238601 
+    - block-15238602 
+  
+  SUT Tree:
+  - block-399455 
+    - block-39945501 
+      - block-39945502 
+  - block-726634 
+  - block-72663401 
+  - block-851270 
+  - block-966325 
+    - block-96632501 
+      - block-96632502 
+  - block-152386 
+    - block-15238601 
+    - block-15238602 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 166:26                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+Property Test: Run 40/50
+DEBUG: Block block-379595 has mismatched parents:
+  SUT parent ID: test-block-0
+  Ref parent ID: block-37959501
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'block-37959501'
+    Actual: 'test-block-0'
+     Which: is different.
+            Expected: block-3795 ...
+              Actual: test-block ...
+                      ^
+             Differ at offset 0
+  Run 48 - After action 2 (Indent(Block(id: block-830952, content: Block 830952, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:41.307250, updatedAt: 2025-11-01 09:50:41.344054))): Parent relationship for block-379595 should match
+  
+  Reference Tree:
+  - block-830952 
+  - block-379595 
+  - block-37959501 
+  
+  SUT Tree:
+  - block-830952 
+  - block-379595 
+  - block-37959501 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 166:26                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+DEBUG: Block block-379595 has mismatched parents:
+  SUT parent ID: block-37959501
+  Ref parent ID: test-block-0
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'test-block-0'
+    Actual: 'block-37959501'
+     Which: is different.
+            Expected: test-block ...
+              Actual: block-3795 ...
+                      ^
+             Differ at offset 0
+  Run 48 - After action 4 (Indent(Block(id: block-830952, content: Block 830952, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:41.307250, updatedAt: 2025-11-01 09:50:41.344054))): Parent relationship for block-379595 should match
+  
+  Reference Tree:
+  - block-830952 
+  - block-379595 
+  - block-37959501 
+  
+  SUT Tree:
+  - block-830952 
+  - block-379595 
+  - block-37959501 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 166:26                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+Property Test: Run 50/50
+DEBUG: Block block-8185501 has mismatched parents:
+  SUT parent ID: block-81855
+  Ref parent ID: test-block-0
+  SUT root ID: test-block-0
+  Ref root ID: test-block-0
+  Expected: 'test-block-0'
+    Actual: 'block-81855'
+     Which: is different.
+            Expected: test-block ...
+              Actual: block-8185 ...
+                      ^
+             Differ at offset 0
+  Run 50 - After action 2 (Drag(Block(id: block-81855, content: Block 81855, children: [Block(id: block-8185501, content: Block 8185501, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:41.399498, updatedAt: 2025-11-01 09:50:41.460801)], isCollapsed: false, createdAt: 2025-11-01 09:50:41.399499, updatedAt: 2025-11-01 09:50:41.460801) -> Block(id: block-63706602, content: Block 63706602, children: [], isCollapsed: false, createdAt: 2025-11-01 09:50:41.399501, updatedAt: 2025-11-01 09:50:41.399501) as before)): Parent relationship for block-8185501 should match
+  
+  Reference Tree:
+  - block-35242 
+  - block-63706602 
+  - block-81855 
+    - block-8185501 
+  - block-620119 
+    - block-62011901 
+  - block-637066 
+    - block-63706601 
+  
+  SUT Tree:
+  - block-35242 
+  - block-63706602 
+  - block-81855 
+    - block-8185501 
+  - block-620119 
+    - block-62011901 
+  - block-637066 
+    - block-63706601 
+  
+  
+  package:matcher                                              expect
+  package:flutter_test/src/widget_tester.dart 473:18           expect
+  test/property_test_base.dart 243:5                           checkStructuralInvariants
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerBinaryCallback
+  test/notifier_property_test.dart 59:11                       main.<fn>.<fn>.<fn>
+  test/property_test_base.dart 166:26                          runPropertyTest.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  test/property_test_base.dart 146:19                          runPropertyTest.<fn>
+  dart:core                                                    Function.apply
+  package:dartproptest/src/property_variadic_async.dart 38:25  forAllAsync
+  ===== asynchronous gap ===========================
+  dart:async                                                   _CustomZone.registerUnaryCallback
+  package:dartproptest/src/property_variadic_async.dart 42:18  forAllAsync
+  test/property_test_base.dart 139:9                           runPropertyTest
+  test/notifier_property_test.dart 14:13                       main.<fn>.<fn>
+  
+
+To run this test again: /opt/homebrew/Caskroom/flutter/3.29.2/flutter/bin/cache/dart-sdk/bin/dart test /Users/martin/Workspaces/pkm/outliner-flutter/test/notifier_property_test.dart -p vm --plain-name 'Notifier Property Tests (Fast - No UI) all operations preserve structural invariants'
+00:03 +12 -1: Some tests failed.                                                                                                                                                                       

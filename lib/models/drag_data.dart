@@ -1,16 +1,17 @@
-import 'block.dart';
-
 enum DropPosition { before, after, asChild }
 
-class DragData {
-  final Block block;
-  final String sourceParentId;
-  final int sourceIndex;
+/// Data carried during drag-and-drop operations.
+/// Generic type [T] matches the block type being dragged.
+class DragData<T> {
+  /// The block being dragged
+  final T block;
+
+  /// The ID of the block being dragged (cached for quick comparisons)
+  final String blockId;
 
   DragData({
     required this.block,
-    required this.sourceParentId,
-    required this.sourceIndex,
+    required this.blockId,
   });
 }
 

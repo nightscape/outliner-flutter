@@ -1,41 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/outliner_config.dart';
-import '../models/block.dart';
+import '../core/block_ops.dart';
+import '../models/outliner_state.dart';
 import '../providers/outliner_provider.dart';
 import 'draggable_block_widget.dart';
 
 /// Core outliner list widget without any app-specific UI chrome.
 ///
 /// Displays a hierarchical list of editable blocks with drag-and-drop support.
-/// All UI states (loading, error, empty) are customizable via builder callbacks.
+/// Generic type [T] allows using any block type (Freezed, FRB-generated, custom).
 ///
-/// Example basic usage:
-/// ```dart
-/// OutlinerListView()
-/// ```
+/// Gets reactive block operations from a Riverpod provider, which means the UI
+/// automatically updates when blocks change.
 ///
-/// Example with custom styling and builders:
+/// Example usage:
 /// ```dart
-/// OutlinerListView(
-///   config: OutlinerConfig(
-///     blockStyle: BlockStyle(indentWidth: 32.0),
-///   ),
-///   loadingBuilder: (context) => MyCustomLoadingWidget(),
-///   emptyBuilder: (context, onAddBlock) => MyEmptyState(onAdd: onAddBlock),
+/// // Define a provider for your BlockOps<T>
+/// final blockOpsProvider = StateNotifierProvider<MyBlockNotifier, BlockOps<MyBlock>>(...);
+///
+/// // Then use the widget
+/// OutlinerListView<MyBlock>(
+///   opsProvider: blockOpsProvider,
+///   notifierProvider: myNotifierProvider,
+///   config: OutlinerConfig(...),
 /// )
 /// ```
-class OutlinerListView extends ConsumerWidget {
+class OutlinerListView<T> extends ConsumerWidget {
+  /// Provider that supplies BlockOps<T> (must be compatible with ProviderListenable<BlockOps<T>>)
+  final ProviderListenable<BlockOps<T>> opsProvider;
+
+  /// Provider for the outliner notifier (used for state-changing operations)
+  final StateNotifierProvider<OutlinerNotifier<T>, OutlinerState<T>>? notifierProvider;
+
   /// Configuration for the outliner
   final OutlinerConfig config;
 
   /// Custom builder for rendering block content when not editing
-  final Widget Function(BuildContext context, Block block)? blockBuilder;
+  final Widget Function(BuildContext context, T block)? blockBuilder;
 
   /// Custom builder for rendering block content when editing
   final Widget Function(
     BuildContext context,
-    Block block,
+    T block,
     TextEditingController controller,
     FocusNode focusNode,
     VoidCallback onSubmitted,
@@ -45,7 +52,7 @@ class OutlinerListView extends ConsumerWidget {
   /// Custom builder for rendering bullet/collapse indicator
   final Widget Function(
     BuildContext context,
-    Block block,
+    T block,
     bool hasChildren,
     bool isCollapsed,
     VoidCallback? onToggle,
@@ -57,25 +64,11 @@ class OutlinerListView extends ConsumerWidget {
   textFieldDecorationBuilder;
 
   /// Custom builder for drag feedback widget
-  final Widget Function(BuildContext context, Block block)? dragFeedbackBuilder;
+  final Widget Function(BuildContext context, T block)? dragFeedbackBuilder;
 
   /// Custom builder for drop zone indicators
   final Widget Function(BuildContext context, bool isHighlighted, double depth)?
   dropZoneBuilder;
-
-  /// Custom builder for loading state
-  /// If null, shows a simple centered loading indicator
-  final Widget Function(BuildContext context)? loadingBuilder;
-
-  /// Custom builder for error state
-  /// Parameters: context, error message, retry callback
-  /// If null, shows simple error text with retry button
-  final Widget Function(
-    BuildContext context,
-    String errorMessage,
-    VoidCallback onRetry,
-  )?
-  errorBuilder;
 
   /// Custom builder for empty state
   /// Parameters: context, callback to add first block
@@ -85,6 +78,8 @@ class OutlinerListView extends ConsumerWidget {
 
   const OutlinerListView({
     super.key,
+    required this.opsProvider,
+    this.notifierProvider,
     this.config = const OutlinerConfig(),
     this.blockBuilder,
     this.editingBlockBuilder,
@@ -92,70 +87,16 @@ class OutlinerListView extends ConsumerWidget {
     this.textFieldDecorationBuilder,
     this.dragFeedbackBuilder,
     this.dropZoneBuilder,
-    this.loadingBuilder,
-    this.errorBuilder,
     this.emptyBuilder,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final outlinerState = ref.watch(outlinerProvider);
-
-    return outlinerState.when(
-      loading: () => _buildLoadingState(context),
-      error: (message) => _buildErrorState(context, ref, message),
-      loaded: (rootBlock, focusedBlockId, cursorPosition, viewRootId) =>
-          _buildLoadedState(context, rootBlock),
-    );
-  }
-
-  Widget _buildLoadingState(BuildContext context) {
-    if (loadingBuilder != null) {
-      return loadingBuilder!(context);
-    }
-
-    // Default simple loading widget
-    return const Center(
-      child: SizedBox(
-        width: 24,
-        height: 24,
-        child: CircularProgressIndicator(),
-      ),
-    );
-  }
-
-  Widget _buildErrorState(BuildContext context, WidgetRef ref, String message) {
-    void onRetry() {
-      ref.read(outlinerProvider.notifier).loadBlocks();
-    }
-
-    if (errorBuilder != null) {
-      return errorBuilder!(context, message, onRetry);
-    }
-
-    // Default simple error widget
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Error loading blocks'),
-          const SizedBox(height: 8),
-          Text(message),
-          const SizedBox(height: 16),
-          GestureDetector(onTap: onRetry, child: const Text('Retry')),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoadedState(
-    BuildContext context,
-    Block rootBlock,
-  ) {
-    final blocks = rootBlock.children;
+    final ops = ref.watch(opsProvider);
+    final blocks = ops.getTopLevelBlocks();
 
     if (blocks.isEmpty) {
-      return _buildEmptyState(context);
+      return _buildEmptyState(context, ops);
     }
 
     return ListView(
@@ -169,9 +110,11 @@ class OutlinerListView extends ConsumerWidget {
               final block = entry.value;
               final isLastSibling = index == blocks.length - 1;
 
-              return DraggableBlockWidget(
-                key: ValueKey(block.id),
+              return DraggableBlockWidget<T>(
+                key: ValueKey(ops.getId(block)),
                 block: block,
+                ops: ops,
+                notifierProvider: notifierProvider,
                 keyboardShortcutsEnabled: config.keyboardShortcutsEnabled,
                 style: config.blockStyle,
                 isLastSibling: isLastSibling,
@@ -188,34 +131,48 @@ class OutlinerListView extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmptyState(BuildContext context) {
-    // Empty state needs access to WidgetRef, so we wrap in Consumer
-    return Consumer(
-      builder: (context, ref, _) {
-        void onAddBlock() {
-          final state = ref.read(outlinerProvider);
-          final rootId = state.whenOrNull(
-            loaded: (rootBlock, _, __, ___) => rootBlock.id,
-          );
-          if (rootId != null) {
-            ref
-                .read(outlinerProvider.notifier)
-                .addChildBlock(rootId, Block.create(content: ''));
-          }
-        }
+  Widget _buildEmptyState(BuildContext context, BlockOps<T> ops) {
+    // This is called from build() which already has access to WidgetRef
+    // We need to restructure this to accept ref as a parameter
+    // For now, we'll make this a separate ConsumerWidget
+    return _EmptyStateWidget<T>(
+      ops: ops,
+      notifierProvider: notifierProvider,
+      emptyBuilder: emptyBuilder,
+    );
+  }
+}
 
-        if (emptyBuilder != null) {
-          return emptyBuilder!(context, onAddBlock);
-        }
+class _EmptyStateWidget<T> extends ConsumerWidget {
+  final BlockOps<T> ops;
+  final StateNotifierProvider<OutlinerNotifier<T>, OutlinerState<T>>? notifierProvider;
+  final Widget Function(BuildContext context, VoidCallback onAddBlock)? emptyBuilder;
 
-        // Default simple empty widget
-        return Center(
-          child: GestureDetector(
-            onTap: onAddBlock,
-            child: const Text('No blocks. Tap to add one.'),
-          ),
-        );
-      },
+  const _EmptyStateWidget({
+    required this.ops,
+    this.notifierProvider,
+    this.emptyBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    void onAddBlock() {
+      final provider = notifierProvider ?? outlinerProvider;
+      final notifier = ref.read(provider.notifier);
+      final newBlock = ops.create(content: '');
+      notifier.ops.addTopLevelBlock(newBlock);
+    }
+
+    if (emptyBuilder != null) {
+      return emptyBuilder!(context, onAddBlock);
+    }
+
+    // Default simple empty widget
+    return Center(
+      child: GestureDetector(
+        onTap: onAddBlock,
+        child: const Text('No blocks. Tap to add one.'),
+      ),
     );
   }
 }

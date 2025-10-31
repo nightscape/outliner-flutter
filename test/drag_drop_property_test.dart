@@ -26,7 +26,7 @@ class OutlinerModel {
     required this.rootId,
   });
 
-  OutlinerModel.fromNotifier(OutlinerNotifier notifier)
+  OutlinerModel.fromNotifier(OutlinerNotifier<Block> notifier)
     : parentMap = {},
       childrenMap = {},
       allBlockIds = {},
@@ -39,7 +39,7 @@ class OutlinerModel {
     }
   }
 
-  static String _getRootId(OutlinerState state) {
+  static String _getRootId(OutlinerState<Block> state) {
     return state.whenOrNull(
       loaded: (rootBlock, _, __, ___) => rootBlock.id,
     ) ?? '';
@@ -112,14 +112,14 @@ class OutlinerModel {
 }
 
 class OutlinerGenerators {
-  static Generator<OutlinerNotifier> simpleOutliner() {
+  static Generator<OutlinerNotifier<Block>> simpleOutliner() {
     return Gen.interval(1, 5).flatMap((numRoots) {
       return Gen.array(
         blockTree(maxDepth: 2, maxChildren: 3),
         minLength: numRoots,
         maxLength: numRoots,
       ).map((blocks) {
-        final notifier = OutlinerNotifier(
+        final notifier = OutlinerNotifier<Block>(
           InMemoryOutlinerRepository(initializeSampleData: false),
         );
         // This is a workaround for synchronous generator - blocks will be added in test setup
@@ -157,15 +157,15 @@ class OutlinerGenerators {
   }
 }
 
-Generator<Action<OutlinerNotifier, OutlinerModel>> moveActionGen(
-  OutlinerNotifier notifier,
+Generator<Action<OutlinerNotifier<Block>, OutlinerModel>> moveActionGen(
+  OutlinerNotifier<Block> notifier,
   OutlinerModel model,
 ) {
   final allBlocks = model.allBlockIds.toList();
 
   if (allBlocks.isEmpty) {
     return Gen.just(
-      Action<OutlinerNotifier, OutlinerModel>((notifier, model) {}, 'NoOp'),
+      Action<OutlinerNotifier<Block>, OutlinerModel>((notifier, model) {}, 'NoOp'),
     );
   }
 
@@ -190,12 +190,12 @@ Generator<Action<OutlinerNotifier, OutlinerModel>> moveActionGen(
 
     if (possibleTargets.isEmpty) {
       return Gen.just(
-        Action<OutlinerNotifier, OutlinerModel>((notifier, model) {}, 'NoOp'),
+        Action<OutlinerNotifier<Block>, OutlinerModel>((notifier, model) {}, 'NoOp'),
       );
     }
 
     return Gen.elementOf(possibleTargets).map((target) {
-      return Action<OutlinerNotifier, OutlinerModel>(
+      return Action<OutlinerNotifier<Block>, OutlinerModel>(
         (notifier, model) {
           notifier.moveBlock(blockId, target.parentId, target.index);
           model.updateAfterMove(blockId, target.parentId, target.index);
@@ -215,7 +215,7 @@ Block? _findBlock(List<Block> blocks, String blockId) {
   return null;
 }
 
-void checkInvariants(OutlinerNotifier notifier, OutlinerModel model) {
+void checkInvariants(OutlinerNotifier<Block> notifier, OutlinerModel model) {
   final actualModel = OutlinerModel.fromNotifier(notifier);
 
   expect(
@@ -302,7 +302,7 @@ void main() {
   group('Drag&Drop Property-Based Tests', () {
     test('moveBlock preserves all invariants', () {
       final prop =
-          statefulProperty<OutlinerNotifier, OutlinerModel>(
+          statefulProperty<OutlinerNotifier<Block>, OutlinerModel>(
                 OutlinerGenerators.simpleOutliner(),
                 (notifier) => OutlinerModel.fromNotifier(notifier),
                 moveActionGen,
